@@ -1,0 +1,10 @@
+datacenter:
+  geos: ["US"]
+  proxy: null
+isp_proxy:
+  geos: ["US", "DE"]
+  proxies:
+    US: "http://user:pass@us.example-egress:8000"
+    DE: "http://user:pass@de.example-egress:8000"
+retrieval_api:
+  provider: "exa"

@@ -1,0 +1,25 @@
+- id: example-open
+  url: https://example.com/
+  region: US
+  gating_type: long_tail
+  requires_geo: US
+  oracle:
+    type: css
+    match: "h1"
+- id: httpbin-html
+  url: https://httpbin.org/html
+  region: US
+  gating_type: long_tail
+  requires_geo: US
+  oracle:
+    type: regex
+    match: "Herman Melville"
+- id: example-shop-de
+  url: https://example.de/product/123
+  region: DE
+  gating_type: anti_fraud
+  requires_geo: DE
+  oracle:
+    type: css
+    match: "div.product-price"
+  login_gated_stop: null
