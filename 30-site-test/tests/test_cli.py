@@ -15,6 +15,18 @@ def test_build_host_adapters_from_egress():
 def test_build_host_adapters_empty():
     assert _build_host_adapters({}) == []
 
+def test_build_host_adapters_skips_unbuildable_host(monkeypatch, capsys):
+    # metro host with a declared-but-unset API key env is skipped; others still build.
+    monkeypatch.delenv("METRO_API_KEY", raising=False)
+    egress = {"hosts": {
+        "this-machine": {"connector": "local", "geos": ["US"]},
+        "metro": {"connector": "metro", "geos": ["US"], "api_key_env": "METRO_API_KEY",
+                  "endpoints": {"US": "http://us:8000"}},
+    }}
+    adapters = _build_host_adapters(egress)
+    assert [a.name for a in adapters] == ["this-machine"]      # metro skipped
+    assert "skipping host" in capsys.readouterr().out
+
 def test_aggregate_command_roundtrip(tmp_path):
     infile = tmp_path / "results.jsonl"
     out = tmp_path / "scorecard.json"

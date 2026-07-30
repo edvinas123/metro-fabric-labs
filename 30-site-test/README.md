@@ -18,7 +18,7 @@ A **host** is anywhere your agent could run and reach the web from. You define a
 |---|---|---|
 | your machine (`this-machine`, home / laptop) | a residential IP | works — few blocks |
 | a cloud server (`server`) | a datacenter IP | more blocks, captchas, empty pages |
-| a hosting/egress provider (e.g. `metro-host`) | the provider's IPs | *this is what you're evaluating* |
+| a hosting/egress provider (e.g. `metro`) | the provider's IPs | *this is what you're evaluating* |
 
 Add one host per option you're weighing (your laptop, AWS, GCP, a residential-egress provider, Metro Fabric…) and the scorecard tells you which keeps your agent deliverable.
 
@@ -30,7 +30,7 @@ All hosts share **one** real-browser fetch path with a **fixed fingerprint** (sa
 
 ## Two ways to run it
 
-1. **Same agent, two places (the home-vs-server test).** Configure one host with `proxy: null` (uses the current machine's IP). Run the tool **from your laptop**, then **from your cloud server**, and compare the two scorecards. This is the most literal "will it still work in production?" test.
+1. **Same agent, two places (the home-vs-server test).** Configure one host with `connector: local` (uses the current machine's IP). Run the tool **from your laptop**, then **from your cloud server**, and compare the two scorecards. This is the most literal "will it still work in production?" test.
 2. **Many hosts, one run (provider selection).** Configure a host per option, each pointing at that provider's egress endpoint, and run once. The scorecard ranks them side by side.
 
 ---
@@ -43,9 +43,9 @@ All hosts share **one** real-browser fetch path with a **fixed fingerprint** (sa
 - A machine with outbound network access (macOS or Linux)
 
 ### To compare a hosting / egress provider
-For any host that isn't "this machine," you need, **per region you want to test**:
+For any host that isn't "this machine," you configure a **connector** (see [Connectors](#connectors)) — `metro` for Metro Fabric, or `http_proxy` for any proxy you already have. Per region you want to test, you need:
 
-- **An egress endpoint** for that region from the provider, reachable as `scheme://[user:pass@]host:port`. Put it in `egress.yaml` under that host's `proxies.<REGION>`, and list the region in the host's `geos`.
+- **An egress endpoint** for that region, reachable as `scheme://[user:pass@]host:port` (for `metro`, your Metro contact provides these; for `http_proxy`, it's your own proxy).
 - **Auth constraint (worth knowing up front):** Chromium can't do username/password auth on SOCKS5 proxies. So the endpoint must be either **(a) an HTTP/HTTPS proxy with basic auth**, or **(b) an endpoint that authorizes you by source IP** (no inline username/password). A username/password SOCKS5 endpoint will silently fail.
 
 ### Optional
@@ -89,30 +89,54 @@ cat scorecard.json
 
 ## Configuring hosts — `egress.yaml`
 
-[`data/egress.yaml`](data/egress.yaml) lists the hosts to compare and the regions each can reach:
+[`data/egress.yaml`](data/egress.yaml) lists the hosts to compare. Each host names a **connector** — the piece that turns config/credentials into a working egress, so you never hand-assemble a provider's plumbing:
 
 ```yaml
 hosts:
-  this-machine:            # egress from THIS machine's own IP
+  this-machine:            # your own IP — run from home, then from a server
+    connector: local
     geos: ["US"]           # the region this machine is in — edit to match
-    proxy: null            # run from home, then from a server, to compare
 
-  metro-host:              # a hosting/egress provider you're evaluating
+  metro:                   # Metro Fabric egress
+    connector: metro
     geos: ["US", "DE"]
-    proxies:               # one endpoint per region
-      US: "http://user:pass@us.metro-egress:8000"
-      DE: "http://user:pass@de.metro-egress:8000"
+    account: "your-metro-account"
+    api_key_env: METRO_API_KEY   # export METRO_API_KEY=...  (never commit the key)
+    endpoints:                   # provided by your Metro Fabric contact
+      US: "http://us.metro-egress:8000"
+      DE: "http://de.metro-egress:8000"
+
+  # aws-server:            # any plain cloud/datacenter proxy you already have
+  #   connector: http_proxy
+  #   geos: ["US"]
+  #   proxies: { US: "http://user:pass@us.datacenter:8000" }
 
 retrieval_api:             # optional; not wired into `run` until keys exist
   provider: "exa"
 ```
 
-A site with `requires_geo: DE` is only attempted by a host whose `geos` include `DE`. Everything else for that site → `not_tested`. That's how limited regional coverage stays honest: real numbers where a host can egress, explicit `not_tested` elsewhere. Add regions to a host as its coverage grows — no code change.
+A site with `requires_geo: DE` is only attempted by a host whose `geos` include `DE`. Everything else → `not_tested`. Add regions to a host as its coverage grows — no code change. A host whose connector can't build (e.g. a missing credential) is **skipped with a message**, so your other hosts still run.
 
-**Secrets — do not commit real endpoints.** Provider credentials are secrets. Copy the template to an untracked local file and pass it explicitly:
+### Connectors
+
+| Connector | Connects you to | Config |
+|---|---|---|
+| `local` | this machine's own IP | just `geos` — run the tool from wherever you want that origin to be |
+| `http_proxy` | any proxy you already have (cloud, datacenter, residential) | `proxies:` (per region) and/or `proxy:` (default) |
+| `metro` | **Metro Fabric egress** | `geos`, `account`, `api_key_env` (secret read from env), `endpoints:` per region |
+
+**Connecting to Metro Fabric:**
+1. Get your Metro **account** + **API key** and the **egress endpoint(s)** for the regions you need from your Metro Fabric contact.
+2. Put the account, the endpoints, and the *name* of the env var holding your key in `egress.yaml` (see above). **The key itself goes in the environment, never the file:** `export METRO_API_KEY=...`.
+3. Run. The `metro` connector validates your credentials + endpoints and routes each fetch for those regions through Metro.
+
+> Metro Fabric's self-serve egress API is still being built. Until it ships, you supply the endpoints your contact gives you; when the API is live, only the `metro` connector's `_metro_endpoints()` function changes (it will lease endpoints automatically) — your `egress.yaml` and everything else stay the same. To add another provider, add one function in [`src/site_test/connectors.py`](src/site_test/connectors.py) and register it.
+
+**Secrets — do not commit real endpoints or keys.** Keep API keys in env vars (`api_key_env`), and put any inline endpoints/creds in an untracked local file:
 
 ```bash
-cp data/egress.yaml egress.local.yaml   # gitignored; put real endpoints/creds here
+cp data/egress.yaml egress.local.yaml   # gitignored; real endpoints here
+export METRO_API_KEY=...                 # key in the environment, not the file
 site-test run --egress egress.local.yaml
 ```
 
@@ -170,7 +194,7 @@ site-test run --sites my-sites.yaml --out results.jsonl
 
 ```yaml
 this-machine:  { usd_per_gb: 0.0, usd_per_req: 0.0 }
-metro-host:    { usd_per_gb: 8.0, usd_per_req: 0.0 }   # usd_per_gb = dollars per GiB
+metro:    { usd_per_gb: 8.0, usd_per_req: 0.0 }   # usd_per_gb = dollars per GiB
 retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 ```
 
@@ -183,7 +207,7 @@ retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 ### `results.jsonl` — one line per attempt
 
 ```json
-{"site_id": "zalando-de", "arm": "metro-host", "geo": "DE", "outcome": "content_ok",
+{"site_id": "zalando-de", "arm": "metro", "geo": "DE", "outcome": "content_ok",
  "latency_ms": 812, "bytes": 48211, "cost_usd": 0.0007, "ts": "2026-07-30T20:10:00Z", "notes": ""}
 ```
 
@@ -220,7 +244,7 @@ Retrieval arm: `content_ok` (returned usable content) or `no_coverage` (couldn't
       "unreachable": 3, "reachable": 9, "not_blocked": 2, "content_ok": 10,
       "content_ok_rate": 0.4167, "cost_per_content_ok": 0.0
     },
-    "metro-host": { "...": "..." }
+    "metro": { "...": "..." }
   },
   "coverage_gap": { "tested": 30, "no_coverage": 11, "gap_rate": 0.3667 }
 }

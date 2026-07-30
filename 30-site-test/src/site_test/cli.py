@@ -2,24 +2,24 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .config import load_sites, load_costs, load_egress
-from .adapters.direct import HostAdapter
+from .connectors import build_host, ConnectorError
 from .runner import run_attempts
 from .aggregator import aggregate
 from .models import attempt_to_json
 
 
 def _build_host_adapters(egress: dict) -> list:
-    """Build one HostAdapter per entry under `hosts:` in egress.yaml. Any number
-    of hosts is allowed (your machine, cloud servers, hosting providers). The
-    retrieval arm is added once Exa/Parallel credentials exist."""
+    """Build one HostAdapter per entry under `hosts:` in egress.yaml, via its
+    connector. Any number of hosts is allowed (your machine, cloud servers,
+    hosting providers). A host whose connector can't build (e.g. a missing
+    credential) is skipped with a message, so the other hosts still run. The
+    retrieval arm is added once Exa/Parallel keys exist."""
     adapters = []
     for name, profile in (egress.get("hosts") or {}).items():
-        adapters.append(HostAdapter(
-            name=name,
-            geos=profile.get("geos", []),
-            proxies=profile.get("proxies", {}),
-            default_proxy=profile.get("proxy"),
-        ))
+        try:
+            adapters.append(build_host(name, profile))
+        except ConnectorError as e:
+            print(f"skipping host: {e}")
     return adapters
 
 
