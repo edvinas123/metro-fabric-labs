@@ -46,3 +46,27 @@ def test_block_page_scored_reachable():
                       result=RawResult(status=200, html="Just a moment...", latency_ms=7, bytes=15))
     attempts = run_attempts([site], [isp], COSTS, rate_limit_s=0)
     assert attempts[0].outcome == "reachable"
+
+def test_bad_oracle_becomes_unreachable_not_crash():
+    # Invalid CSS selector raises inside scoring; the run must record one errored
+    # attempt, not abort the whole run.
+    site = Site(id="s1", url="https://x.test", region="DE", gating_type="anti_fraud",
+                requires_geo="DE", oracle=Oracle(type="css", match="::::"))
+    isp = FakeAdapter("isp_proxy", "direct", geos=["DE"],
+                      result=RawResult(status=200, html="<html><body>hi</body></html>", latency_ms=5, bytes=5))
+    attempts = run_attempts([site], [isp], COSTS, rate_limit_s=0)
+    assert attempts[0].outcome == "unreachable"
+    assert attempts[0].notes.startswith("error:")
+
+def test_rate_limit_throttles_same_domain(monkeypatch):
+    import site_test.runner as R
+    slept = []
+    monkeypatch.setattr(R.time, "sleep", lambda s: slept.append(s))
+    s1 = Site(id="a", url="https://dom.test/1", region="US", gating_type="long_tail",
+              requires_geo="US", oracle=Oracle(type="regex", match="ok"))
+    s2 = Site(id="b", url="https://dom.test/2", region="US", gating_type="long_tail",
+              requires_geo="US", oracle=Oracle(type="regex", match="ok"))
+    dc = FakeAdapter("datacenter", "direct", geos=["US"],
+                     result=RawResult(status=200, html="ok", latency_ms=1, bytes=2))
+    run_attempts([s1, s2], [dc], COSTS, rate_limit_s=5)
+    assert any(x > 0 for x in slept)  # second same-domain hit was throttled

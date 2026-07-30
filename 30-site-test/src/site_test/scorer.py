@@ -42,6 +42,11 @@ def score_direct(raw: RawResult, oracle: Oracle) -> Tier:
         return Tier.UNREACHABLE
     if is_block_page(raw.html):
         return Tier.REACHABLE
+    # An HTTP error status (403/429/5xx) that carries no known block marker is
+    # still a block/failure, not a loaded page — cap it at reachable so it never
+    # inflates the not_blocked / content_ok rates.
+    if raw.status >= 400:
+        return Tier.REACHABLE
     if oracle_matches(raw.html, oracle):
         return Tier.CONTENT_OK
     return Tier.NOT_BLOCKED

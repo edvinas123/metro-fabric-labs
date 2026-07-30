@@ -38,6 +38,12 @@ def test_regex_oracle():
     raw = RawResult(status=200, html=load("real_content.html"), latency_ms=100, bytes=100)
     assert score_direct(raw, o) == Tier.CONTENT_OK
 
+def test_http_error_status_caps_at_reachable():
+    # Body even contains the oracle target, but a 403 must NOT score content_ok.
+    html = "<html><body><div class='product-price'>x</div></body></html>"
+    raw = RawResult(status=403, html=html, latency_ms=10, bytes=10)
+    assert score_direct(raw, ORACLE) == Tier.REACHABLE
+
 def test_retrieval_coverage():
     assert score_retrieval(RawResult(status=200, html="usable content", latency_ms=50)) == "content_ok"
     assert score_retrieval(RawResult(status=200, html="", latency_ms=50)) == "no_coverage"

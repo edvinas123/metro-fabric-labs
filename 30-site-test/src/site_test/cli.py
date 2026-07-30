@@ -26,10 +26,14 @@ def cmd_run(args):
     costs = load_costs(args.costs)
     egress = load_egress(args.egress)
     adapters = _build_direct_adapters(egress)
-    attempts = run_attempts(sites, adapters, costs, rate_limit_s=args.rate_limit)
+    # Stream each attempt to disk as it completes, so a crash mid-run keeps
+    # everything already measured rather than discarding a whole buffered run.
     with open(args.out, "w") as f:
-        for a in attempts:
+        def sink(a):
             f.write(attempt_to_json(a) + "\n")
+            f.flush()
+        attempts = run_attempts(sites, adapters, costs,
+                                rate_limit_s=args.rate_limit, on_attempt=sink)
     print(f"wrote {len(attempts)} attempts to {args.out}")
 
 

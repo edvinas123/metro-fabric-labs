@@ -28,11 +28,13 @@ def fetch(url: str, proxy: Optional[str] = None, timeout_ms: int = 20000) -> Raw
             ctx = browser.new_context(
                 user_agent=FIXED_UA, viewport=FIXED_VIEWPORT, locale=FIXED_LOCALE
             )
-            page = ctx.new_page()
-            resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-            html = page.content()
-            status = resp.status if resp else None
-            browser.close()
+            try:
+                page = ctx.new_page()
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                html = page.content()
+                status = resp.status if resp else None
+            finally:
+                browser.close()
             latency = int((time.monotonic() - t0) * 1000)
             return RawResult(status=status, html=html, latency_ms=latency,
                              bytes=len(html.encode("utf-8")))
