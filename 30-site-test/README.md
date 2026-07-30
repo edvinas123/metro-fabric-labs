@@ -22,6 +22,26 @@ Direct arms (`datacenter`, `isp_proxy`) share **one** real-browser fetch path wi
 
 ---
 
+## Requirements
+
+### Software
+- Python ≥ 3.11
+- Playwright + Chromium (`python -m playwright install chromium`)
+- A host with outbound network access (macOS or Linux)
+
+### Metro Fabric infrastructure — for the `isp_proxy` arm
+This arm is what makes it a *Metro Fabric* benchmark: it routes each fetch through Metro's clean-ISP egress. To run it you need, **per region you want to test**:
+
+- **A Metro Fabric egress endpoint** that egresses from a genuine **ISP-ORG-classified** IP (`usage_type = ISP`) in that region. This ISP tagging (the Phase 1 trust anchor) is *what the "clean-ISP" result actually means* — a datacenter-tagged IP in this arm invalidates the whole comparison.
+- Reachable as `scheme://[user:pass@]host:port`, placed in `egress.yaml` under `isp_proxy.proxies.<REGION>`, with the region also listed in `isp_proxy.geos`.
+- **Protocol / auth constraint (read this):** Chromium does **not** support username/password auth on SOCKS5 proxies. The endpoint must therefore be either **(a) an HTTP/HTTPS CONNECT proxy with basic auth**, or **(b) a SOCKS5 / HTTP endpoint authenticated by source-IP allowlist** (no inline credentials). A plain authenticated-SOCKS5 endpoint will silently fail the browser fetch path.
+
+### Optional
+- **Datacenter comparison:** for a fair head-to-head, point the `datacenter` arm at a datacenter-tagged proxy (e.g. an IPXO datacenter IP). With `proxy: null` it uses the host's own IP — only a valid "datacenter" baseline if the host is itself a datacenter box.
+- **Retrieval arm:** Exa and/or Parallel API keys (adapter is built + tested; CLI-wired once keys exist).
+
+---
+
 ## Install
 
 ```bash
@@ -122,6 +142,27 @@ retrieval_api:
 ```
 
 A site with `requires_geo: DE` is only attempted by an arm whose `geos` include `DE`. Everything else for that site → `not_tested`. This is how "limited regions" is handled honestly: you get real numbers for the regions you can actually egress from, and explicit `not_tested` for the rest.
+
+---
+
+## Connecting to Metro Fabric
+
+The benchmark is origin-agnostic by design — each arm is just a way to reach a URL. The **`isp_proxy` arm is the Metro Fabric integration point.**
+
+**Data path.** The runner (laptop, CI, or a Metro bare-metal box — doesn't matter) launches Chromium and, for the `isp_proxy` arm, routes the fetch through the Metro egress endpoint for the site's region. The **egress IP — not the runner's host IP — is what the destination sees and what the benchmark scores.** So you can host the runner anywhere; only the arm's endpoint determines the tested origin.
+
+**Region mapping.** `isp_proxy.geos` in `egress.yaml` must match the regions Metro has live egress in. A site whose `requires_geo` isn't covered is `not_tested`. This is how "we only have a few PoPs today" stays honest: real numbers where Metro can egress, explicit `not_tested` elsewhere. As Metro adds PoPs, add regions to `egress.yaml` — no code change.
+
+**Why it matters to Metro Fabric.** This is the evidence artifact behind the "legs" claim: it quantifies, on real gated sites, the clean-ISP egress advantage Metro Fabric sells — framed as *origin quality*, never as defeating defenses. The two headline numbers are the `content_ok_rate` gap between `isp_proxy` and `datacenter`, and the retrieval `coverage_gap`.
+
+**Secrets — do not commit real endpoints.** Proxy credentials are secrets. Copy the template to an untracked local file and pass it explicitly:
+
+```bash
+cp data/egress.yaml egress.local.yaml   # gitignored; put real Metro endpoints/creds here
+site-test run --egress egress.local.yaml
+```
+
+---
 
 ## Cost config
 
