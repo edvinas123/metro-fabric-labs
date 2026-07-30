@@ -2,7 +2,7 @@
 
 An open, reproducible benchmark that answers one question:
 
-> **On real geo-restricted and gated sites, how does access success (and cost) compare across a datacenter IP, a clean-ISP egress, and a retrieval API?**
+> **On real geo-restricted and gated sites, how does access success (and cost) compare across a datacenter IP, a residential IP, and a retrieval API?**
 
 It fetches each site from each "origin type," decides whether real content actually came back (not a block/captcha/geo-wall page), and reports success rates + cost-per-success + the retrieval-API coverage gap.
 
@@ -15,10 +15,10 @@ It fetches each site from each "origin type," decides whether real content actua
 | Arm | What it is | How it's scored |
 |---|---|---|
 | `datacenter` | A fetch from a datacenter IP (your local box, or a datacenter proxy) | tiered outcome (see below) |
-| `isp_proxy` | A fetch routed through clean-ISP egress, per region | tiered outcome |
+| `residential` | A fetch from a residential IP in the target region (via Metro Fabric egress) | tiered outcome |
 | `retrieval_api` | Content returned by a retrieval API (Exa / Parallel) for the target | coverage: `content_ok` or `no_coverage` |
 
-Direct arms (`datacenter`, `isp_proxy`) share **one** real-browser fetch path with a **fixed fingerprint** (same user-agent, viewport, locale). Only the IP origin differs — so any difference in results is attributable to the origin, not the client.
+Direct arms (`datacenter`, `residential`) share **one** real-browser fetch path with a **fixed fingerprint** (same user-agent, viewport, locale). Only the IP origin differs — so any difference in results is attributable to the origin, not the client.
 
 ---
 
@@ -29,12 +29,11 @@ Direct arms (`datacenter`, `isp_proxy`) share **one** real-browser fetch path wi
 - Playwright + Chromium (`python -m playwright install chromium`)
 - A host with outbound network access (macOS or Linux)
 
-### Metro Fabric infrastructure — for the `isp_proxy` arm
-This arm is what makes it a *Metro Fabric* benchmark: it routes each fetch through Metro's clean-ISP egress. To run it you need, **per region you want to test**:
+### Metro Fabric — for the `residential` arm
+The `residential` arm routes each fetch through **Metro Fabric egress**, so the request exits from a residential IP in the target region. To run it you need, **per region you want to test**:
 
-- **A Metro Fabric egress endpoint** that egresses from a genuine **ISP-ORG-classified** IP (`usage_type = ISP`) in that region. This ISP tagging (the Phase 1 trust anchor) is *what the "clean-ISP" result actually means* — a datacenter-tagged IP in this arm invalidates the whole comparison.
-- Reachable as `scheme://[user:pass@]host:port`, placed in `egress.yaml` under `isp_proxy.proxies.<REGION>`, with the region also listed in `isp_proxy.geos`.
-- **Protocol / auth constraint (read this):** Chromium does **not** support username/password auth on SOCKS5 proxies. The endpoint must therefore be either **(a) an HTTP/HTTPS CONNECT proxy with basic auth**, or **(b) a SOCKS5 / HTTP endpoint authenticated by source-IP allowlist** (no inline credentials). A plain authenticated-SOCKS5 endpoint will silently fail the browser fetch path.
+- **A Metro Fabric egress endpoint** for that region, reachable as `scheme://[user:pass@]host:port`. Put it in `egress.yaml` under `residential.proxies.<REGION>` and list the region in `residential.geos`. Ask your Metro Fabric contact for endpoints in the regions you care about.
+- **Auth constraint (worth knowing up front):** Chromium can't do username/password auth on SOCKS5 proxies. So the endpoint must be either **(a) an HTTP/HTTPS proxy with basic auth**, or **(b) an endpoint that authorizes you by source IP** (no inline username/password). A username/password SOCKS5 endpoint will silently fail.
 
 ### Optional
 - **Datacenter comparison:** for a fair head-to-head, point the `datacenter` arm at a datacenter-tagged proxy (e.g. an IPXO datacenter IP). With `proxy: null` it uses the host's own IP — only a valid "datacenter" baseline if the host is itself a datacenter box.
@@ -132,7 +131,7 @@ Each entry:
 datacenter:
   geos: ["US"]            # regions this arm can egress from
   proxy: null             # null = your local machine; or "http://user:pass@host:port"
-isp_proxy:
+residential:
   geos: ["US", "DE"]
   proxies:                # one proxy endpoint per region
     US: "http://user:pass@us.egress:8000"
@@ -147,13 +146,13 @@ A site with `requires_geo: DE` is only attempted by an arm whose `geos` include 
 
 ## Connecting to Metro Fabric
 
-The benchmark is origin-agnostic by design — each arm is just a way to reach a URL. The **`isp_proxy` arm is the Metro Fabric integration point.**
+The benchmark is origin-agnostic by design — each arm is just a way to reach a URL. The **`residential` arm is the Metro Fabric integration point.**
 
-**Data path.** The runner (laptop, CI, or a Metro bare-metal box — doesn't matter) launches Chromium and, for the `isp_proxy` arm, routes the fetch through the Metro egress endpoint for the site's region. The **egress IP — not the runner's host IP — is what the destination sees and what the benchmark scores.** So you can host the runner anywhere; only the arm's endpoint determines the tested origin.
+**Data path.** The runner (laptop, CI, or a Metro bare-metal box — doesn't matter) launches Chromium and, for the `residential` arm, routes the fetch through the Metro egress endpoint for the site's region. The **egress IP — not the runner's host IP — is what the destination sees and what the benchmark scores.** So you can host the runner anywhere; only the arm's endpoint determines the tested origin.
 
-**Region mapping.** `isp_proxy.geos` in `egress.yaml` must match the regions Metro has live egress in. A site whose `requires_geo` isn't covered is `not_tested`. This is how "we only have a few PoPs today" stays honest: real numbers where Metro can egress, explicit `not_tested` elsewhere. As Metro adds PoPs, add regions to `egress.yaml` — no code change.
+**Region mapping.** `residential.geos` in `egress.yaml` must match the regions Metro has live egress in. A site whose `requires_geo` isn't covered is `not_tested`. This is how "we only have a few PoPs today" stays honest: real numbers where Metro can egress, explicit `not_tested` elsewhere. As Metro adds PoPs, add regions to `egress.yaml` — no code change.
 
-**Why it matters to Metro Fabric.** This is the evidence artifact behind the "legs" claim: it quantifies, on real gated sites, the clean-ISP egress advantage Metro Fabric sells — framed as *origin quality*, never as defeating defenses. The two headline numbers are the `content_ok_rate` gap between `isp_proxy` and `datacenter`, and the retrieval `coverage_gap`.
+**What it tells you.** On real gated sites, it shows how much more content you can reliably reach from a residential IP than from a datacenter IP, and how often a retrieval API simply can't return the page at all. The two headline numbers are the `content_ok_rate` gap between `residential` and `datacenter`, and the retrieval `coverage_gap`.
 
 **Secrets — do not commit real endpoints.** Proxy credentials are secrets. Copy the template to an untracked local file and pass it explicitly:
 
@@ -170,7 +169,7 @@ site-test run --egress egress.local.yaml
 
 ```yaml
 datacenter:    { usd_per_gb: 0.0, usd_per_req: 0.0 }
-isp_proxy:     { usd_per_gb: 8.0, usd_per_req: 0.0 }   # usd_per_gb = dollars per GiB
+residential:     { usd_per_gb: 8.0, usd_per_req: 0.0 }   # usd_per_gb = dollars per GiB
 retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 ```
 
@@ -183,7 +182,7 @@ retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 ### `results.jsonl` — one line per attempt
 
 ```json
-{"site_id": "zalando-de", "arm": "isp_proxy", "geo": "DE", "outcome": "content_ok",
+{"site_id": "zalando-de", "arm": "residential", "geo": "DE", "outcome": "content_ok",
  "latency_ms": 812, "bytes": 48211, "cost_usd": 0.0007, "ts": "2026-07-30T20:10:00Z", "notes": ""}
 ```
 
@@ -198,7 +197,7 @@ retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 
 ### Outcome tiers
 
-Direct arms (`datacenter`, `isp_proxy`), best → worst:
+Direct arms (`datacenter`, `residential`), best → worst:
 
 | Outcome | Meaning |
 |---|---|
@@ -220,7 +219,7 @@ Retrieval arm: `content_ok` (returned usable content) or `no_coverage` (couldn't
       "unreachable": 3, "reachable": 9, "not_blocked": 2, "content_ok": 10,
       "content_ok_rate": 0.4167, "cost_per_content_ok": 0.0
     },
-    "isp_proxy": { "...": "..." }
+    "residential": { "...": "..." }
   },
   "coverage_gap": { "tested": 30, "no_coverage": 11, "gap_rate": 0.3667 }
 }

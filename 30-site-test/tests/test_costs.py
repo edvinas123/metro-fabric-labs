@@ -3,14 +3,14 @@ from site_test.costs import cost_for
 
 COSTS = {
     "datacenter":    {"usd_per_gb": 0.0, "usd_per_req": 0.0},
-    "isp_proxy":     {"usd_per_gb": 8.0, "usd_per_req": 0.0},
+    "residential":     {"usd_per_gb": 8.0, "usd_per_req": 0.0},
     "retrieval_api": {"usd_per_gb": 0.0, "usd_per_req": 0.005},
 }
 
-def test_isp_proxy_cost_by_bytes():
+def test_residential_cost_by_bytes():
     raw = RawResult(status=200, html="x", latency_ms=10, bytes=1_000_000)  # ~1MB
     # 1MB = 1/1024 GB * $8 = 0.0078125
-    assert round(cost_for("isp_proxy", raw, COSTS), 6) == round(8.0 * (1_000_000 / 1_073_741_824), 6)
+    assert round(cost_for("residential", raw, COSTS), 6) == round(8.0 * (1_000_000 / 1_073_741_824), 6)
 
 def test_retrieval_cost_per_req():
     raw = RawResult(status=200, html="x", latency_ms=10, bytes=50)

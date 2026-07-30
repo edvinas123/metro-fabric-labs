@@ -1,7 +1,7 @@
 datacenter:
   geos: ["US"]
   proxy: null
-isp_proxy:
+residential:
   geos: ["US", "DE"]
   proxies:
     US: "http://user:pass@us.example-egress:8000"

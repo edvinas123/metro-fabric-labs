@@ -4,9 +4,9 @@ from site_test.models import Attempt, attempt_to_json
 
 def test_build_direct_adapters_from_egress():
     egress = {"datacenter": {"geos": ["US"], "proxy": None},
-              "isp_proxy": {"geos": ["US", "DE"], "proxies": {"US": "http://u", "DE": "http://d"}}}
+              "residential": {"geos": ["US", "DE"], "proxies": {"US": "http://u", "DE": "http://d"}}}
     adapters = _build_direct_adapters(egress)
-    assert [a.name for a in adapters] == ["datacenter", "isp_proxy"]
+    assert [a.name for a in adapters] == ["datacenter", "residential"]
     assert adapters[1].proxy_for("DE") == "http://d"
 
 def test_build_direct_adapters_datacenter_only():

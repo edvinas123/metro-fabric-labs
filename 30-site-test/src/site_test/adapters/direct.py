@@ -22,8 +22,8 @@ class DatacenterAdapter(EgressAdapter):
         return self._fetch(url, proxy=self.proxy)
 
 
-class IspProxyAdapter(EgressAdapter):
-    name = "isp_proxy"
+class ResidentialAdapter(EgressAdapter):
+    name = "residential"
     kind = "direct"
 
     def __init__(self, geos: list[str], proxies: dict[str, str],

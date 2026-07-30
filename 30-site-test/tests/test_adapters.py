@@ -1,5 +1,5 @@
 from site_test.fetcher import build_launch_options
-from site_test.adapters.direct import DatacenterAdapter, IspProxyAdapter
+from site_test.adapters.direct import DatacenterAdapter, ResidentialAdapter
 from site_test.adapters.retrieval import RetrievalApiAdapter
 from site_test.models import RawResult
 
@@ -18,18 +18,18 @@ def test_datacenter_supports_only_its_geos():
     assert a.supports_geo("US") is True
     assert a.supports_geo("DE") is False
 
-def test_isp_proxy_picks_proxy_by_geo():
-    a = IspProxyAdapter(geos=["US", "DE"], proxies={"US": "http://us:8000", "DE": "http://de:8000"})
-    assert a.name == "isp_proxy"
+def test_residential_picks_proxy_by_geo():
+    a = ResidentialAdapter(geos=["US", "DE"], proxies={"US": "http://us:8000", "DE": "http://de:8000"})
+    assert a.name == "residential"
     assert a.supports_geo("DE") is True
     assert a.proxy_for("DE") == "http://de:8000"
 
-def test_isp_proxy_uses_fetch_fn():
+def test_residential_uses_fetch_fn():
     captured = {}
     def fake_fetch(url, proxy=None, timeout_ms=20000):
         captured["url"], captured["proxy"] = url, proxy
         return RawResult(status=200, html="ok", latency_ms=5, bytes=2)
-    a = IspProxyAdapter(geos=["DE"], proxies={"DE": "http://de:8000"}, fetch_fn=fake_fetch)
+    a = ResidentialAdapter(geos=["DE"], proxies={"DE": "http://de:8000"}, fetch_fn=fake_fetch)
     raw = a.fetch("https://x.test", "DE")
     assert raw.status == 200
     assert captured["proxy"] == "http://de:8000"

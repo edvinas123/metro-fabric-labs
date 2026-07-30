@@ -15,11 +15,11 @@ def test_rates_exclude_not_tested():
 
 def test_cost_per_success():
     rows = [
-        Attempt(site_id="a", arm="isp_proxy", geo="DE", outcome="content_ok", latency_ms=1, bytes=1, cost_usd=0.01, ts="t"),
-        Attempt(site_id="b", arm="isp_proxy", geo="DE", outcome="reachable",  latency_ms=1, bytes=1, cost_usd=0.01, ts="t"),
+        Attempt(site_id="a", arm="residential", geo="DE", outcome="content_ok", latency_ms=1, bytes=1, cost_usd=0.01, ts="t"),
+        Attempt(site_id="b", arm="residential", geo="DE", outcome="reachable",  latency_ms=1, bytes=1, cost_usd=0.01, ts="t"),
     ]
     sc = aggregate(rows)
-    isp = sc["arms"]["isp_proxy"]
+    isp = sc["arms"]["residential"]
     # total cost 0.02 over 1 content_ok = 0.02
     assert round(isp["cost_per_content_ok"], 4) == 0.02
 

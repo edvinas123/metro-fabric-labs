@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .config import load_sites, load_costs, load_egress
-from .adapters.direct import DatacenterAdapter, IspProxyAdapter
+from .adapters.direct import DatacenterAdapter, ResidentialAdapter
 from .runner import run_attempts
 from .aggregator import aggregate
 from .models import attempt_to_json
@@ -15,9 +15,9 @@ def _build_direct_adapters(egress: dict) -> list:
     if "datacenter" in egress:
         dc = egress["datacenter"]
         adapters.append(DatacenterAdapter(geos=dc.get("geos", []), proxy=dc.get("proxy")))
-    if "isp_proxy" in egress:
-        isp = egress["isp_proxy"]
-        adapters.append(IspProxyAdapter(geos=isp.get("geos", []), proxies=isp.get("proxies", {})))
+    if "residential" in egress:
+        isp = egress["residential"]
+        adapters.append(ResidentialAdapter(geos=isp.get("geos", []), proxies=isp.get("proxies", {})))
     return adapters
 
 
