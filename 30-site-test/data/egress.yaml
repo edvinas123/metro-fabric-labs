@@ -1,10 +1,23 @@
-datacenter:
-  geos: ["US"]
-  proxy: null
-residential:
-  geos: ["US", "DE"]
-  proxies:
-    US: "http://user:pass@us.example-egress:8000"
-    DE: "http://user:pass@de.example-egress:8000"
+# Each entry under `hosts:` is a place your agent could run / egress from.
+# Compare as many as you like — your own machine, cloud servers, hosting/egress
+# providers — then see which keeps your agent deliverable in production.
+#
+# A host with `proxy: null` egresses from THIS machine's own IP: run the tool
+# from your laptop, then from a cloud server, to see the home-vs-server gap.
+# A host with `proxies:` routes through a provider's per-region endpoint.
+
+hosts:
+  this-machine:
+    geos: ["US"]        # the region THIS machine egresses from — edit to match
+    proxy: null         # your current IP (run from home, then from a server)
+
+  metro-host:
+    geos: ["US", "DE"]
+    proxies:            # a hosting/egress provider's per-region endpoint
+      US: "http://user:pass@us.metro-egress:8000"
+      DE: "http://user:pass@de.metro-egress:8000"
+
+# Optional third comparison: skip hosting a fetcher and use a retrieval API.
+# Not wired into `run` until Exa/Parallel credentials exist.
 retrieval_api:
   provider: "exa"

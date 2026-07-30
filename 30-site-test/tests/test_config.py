@@ -19,10 +19,10 @@ def test_load_sites_returns_site_objects():
 
 def test_load_costs():
     costs = load_costs(DATA / "costs.yaml")
-    assert costs["residential"]["usd_per_gb"] == 8.0
+    assert costs["metro-host"]["usd_per_gb"] == 8.0
     assert costs["retrieval_api"]["usd_per_req"] == 0.005
 
 def test_load_egress():
     eg = load_egress(DATA / "egress.yaml")
-    assert eg["residential"]["geos"] == ["US", "DE"]
-    assert eg["datacenter"]["proxy"] is None
+    assert eg["hosts"]["metro-host"]["geos"] == ["US", "DE"]
+    assert eg["hosts"]["this-machine"]["proxy"] is None

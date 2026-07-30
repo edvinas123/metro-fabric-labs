@@ -1,5 +1,5 @@
 from site_test.fetcher import build_launch_options
-from site_test.adapters.direct import DatacenterAdapter, ResidentialAdapter
+from site_test.adapters.direct import HostAdapter
 from site_test.adapters.retrieval import RetrievalApiAdapter
 from site_test.models import RawResult
 
@@ -11,26 +11,31 @@ def test_launch_options_with_proxy():
     assert opts["proxy"] == {"server": "http://x:8000"}
     assert opts["headless"] is True
 
-def test_datacenter_supports_only_its_geos():
-    a = DatacenterAdapter(geos=["US"], proxy=None)
-    assert a.name == "datacenter"
-    assert a.kind == "direct"
-    assert a.supports_geo("US") is True
-    assert a.supports_geo("DE") is False
+def test_host_supports_only_its_geos():
+    h = HostAdapter(name="server", geos=["US"])
+    assert h.name == "server"
+    assert h.kind == "direct"
+    assert h.supports_geo("US") is True
+    assert h.supports_geo("DE") is False
 
-def test_residential_picks_proxy_by_geo():
-    a = ResidentialAdapter(geos=["US", "DE"], proxies={"US": "http://us:8000", "DE": "http://de:8000"})
-    assert a.name == "residential"
-    assert a.supports_geo("DE") is True
-    assert a.proxy_for("DE") == "http://de:8000"
+def test_host_picks_proxy_by_geo():
+    h = HostAdapter(name="metro-host", geos=["US", "DE"],
+                    proxies={"US": "http://us:8000", "DE": "http://de:8000"})
+    assert h.supports_geo("DE") is True
+    assert h.proxy_for("DE") == "http://de:8000"
 
-def test_residential_uses_fetch_fn():
+def test_host_default_proxy_when_geo_absent():
+    # proxy: null host -> egress from this machine's own IP (proxy_for returns None)
+    h = HostAdapter(name="this-machine", geos=["US"], proxies={}, default_proxy=None)
+    assert h.proxy_for("US") is None
+
+def test_host_uses_fetch_fn():
     captured = {}
     def fake_fetch(url, proxy=None, timeout_ms=20000):
         captured["url"], captured["proxy"] = url, proxy
         return RawResult(status=200, html="ok", latency_ms=5, bytes=2)
-    a = ResidentialAdapter(geos=["DE"], proxies={"DE": "http://de:8000"}, fetch_fn=fake_fetch)
-    raw = a.fetch("https://x.test", "DE")
+    h = HostAdapter(name="metro-host", geos=["DE"], proxies={"DE": "http://de:8000"}, fetch_fn=fake_fetch)
+    raw = h.fetch("https://x.test", "DE")
     assert raw.status == 200
     assert captured["proxy"] == "http://de:8000"
 

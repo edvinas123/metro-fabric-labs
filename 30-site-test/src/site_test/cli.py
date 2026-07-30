@@ -2,22 +2,24 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 from .config import load_sites, load_costs, load_egress
-from .adapters.direct import DatacenterAdapter, ResidentialAdapter
+from .adapters.direct import HostAdapter
 from .runner import run_attempts
 from .aggregator import aggregate
 from .models import attempt_to_json
 
 
-def _build_direct_adapters(egress: dict) -> list:
-    """Build only the direct arms from egress.yaml. The retrieval arm is added
-    once Exa/Parallel credentials exist (see issue: RetrievalApiAdapter wiring)."""
+def _build_host_adapters(egress: dict) -> list:
+    """Build one HostAdapter per entry under `hosts:` in egress.yaml. Any number
+    of hosts is allowed (your machine, cloud servers, hosting providers). The
+    retrieval arm is added once Exa/Parallel credentials exist."""
     adapters = []
-    if "datacenter" in egress:
-        dc = egress["datacenter"]
-        adapters.append(DatacenterAdapter(geos=dc.get("geos", []), proxy=dc.get("proxy")))
-    if "residential" in egress:
-        isp = egress["residential"]
-        adapters.append(ResidentialAdapter(geos=isp.get("geos", []), proxies=isp.get("proxies", {})))
+    for name, profile in (egress.get("hosts") or {}).items():
+        adapters.append(HostAdapter(
+            name=name,
+            geos=profile.get("geos", []),
+            proxies=profile.get("proxies", {}),
+            default_proxy=profile.get("proxy"),
+        ))
     return adapters
 
 
@@ -25,7 +27,7 @@ def cmd_run(args):
     sites = load_sites(args.sites)
     costs = load_costs(args.costs)
     egress = load_egress(args.egress)
-    adapters = _build_direct_adapters(egress)
+    adapters = _build_host_adapters(egress)
     # Stream each attempt to disk as it completes, so a crash mid-run keeps
     # everything already measured rather than discarding a whole buffered run.
     with open(args.out, "w") as f:

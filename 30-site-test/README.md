@@ -1,24 +1,37 @@
 # the-30-site-test
 
-An open, reproducible benchmark that answers one question:
+**A deliverability test for AI agents — before you move to production.**
 
-> **On real geo-restricted and gated sites, how does access success (and cost) compare across a datacenter IP, a residential IP, and a retrieval API?**
+Your agent works great when you build it on your laptop. You deploy it to a cloud server, and suddenly it's blocked, rate-limited, or served empty pages. Same code — different result — because the sites now see a **datacenter IP** instead of the **home/residential IP** your laptop had.
 
-It fetches each site from each "origin type," decides whether real content actually came back (not a block/captcha/geo-wall page), and reports success rates + cost-per-success + the retrieval-API coverage gap.
+This benchmark measures that gap *before* you ship, and helps you **choose where to host** your agent. It fetches a set of real geo-restricted and gated sites from each place your agent could run, decides whether real content actually came back (not a block/captcha/geo-wall page), and reports how often each host succeeds — plus what it costs.
 
-> **Principle:** every fetch is a plain read-only GET from a *legitimate* origin. This tool does **not** solve captchas, bypass logins, or spoof fingerprints to evade detection. It measures origin quality — it does not defeat defenses. It never fabricates a result: a site it can't run in a given region is recorded as `not_tested`, never guessed.
+> **Principle:** every fetch is a plain read-only GET from a *legitimate* origin. This tool does **not** solve captchas, bypass logins, or spoof fingerprints to evade detection. It measures how reachable the open web is from a given host — it does not defeat defenses. It never fabricates a result: a site it can't run from a given region is recorded as `not_tested`, never guessed.
 
 ---
 
-## The three arms
+## What it compares — "hosts"
 
-| Arm | What it is | How it's scored |
+A **host** is anywhere your agent could run and reach the web from. You define as many as you want and the benchmark scores each one. The two you'll almost always compare:
+
+| Host | What it represents | Typical result |
 |---|---|---|
-| `datacenter` | A fetch from a datacenter IP (your local box, or a datacenter proxy) | tiered outcome (see below) |
-| `residential` | A fetch from a residential IP in the target region (via Metro Fabric egress) | tiered outcome |
-| `retrieval_api` | Content returned by a retrieval API (Exa / Parallel) for the target | coverage: `content_ok` or `no_coverage` |
+| your machine (`this-machine`, home / laptop) | a residential IP | works — few blocks |
+| a cloud server (`server`) | a datacenter IP | more blocks, captchas, empty pages |
+| a hosting/egress provider (e.g. `metro-host`) | the provider's IPs | *this is what you're evaluating* |
 
-Direct arms (`datacenter`, `residential`) share **one** real-browser fetch path with a **fixed fingerprint** (same user-agent, viewport, locale). Only the IP origin differs — so any difference in results is attributable to the origin, not the client.
+Add one host per option you're weighing (your laptop, AWS, GCP, a residential-egress provider, Metro Fabric…) and the scorecard tells you which keeps your agent deliverable.
+
+All hosts share **one** real-browser fetch path with a **fixed fingerprint** (same user-agent, viewport, locale). Only the IP origin differs — so any difference in results is attributable to *where you run*, not to the client.
+
+> There's also an optional **`retrieval_api`** comparison — instead of hosting a fetcher at all, use a data API (Exa / Parallel). It scores *coverage* (could it return the page or not). Built and tested; wired into `run` once you add API keys.
+
+---
+
+## Two ways to run it
+
+1. **Same agent, two places (the home-vs-server test).** Configure one host with `proxy: null` (uses the current machine's IP). Run the tool **from your laptop**, then **from your cloud server**, and compare the two scorecards. This is the most literal "will it still work in production?" test.
+2. **Many hosts, one run (provider selection).** Configure a host per option, each pointing at that provider's egress endpoint, and run once. The scorecard ranks them side by side.
 
 ---
 
@@ -27,17 +40,16 @@ Direct arms (`datacenter`, `residential`) share **one** real-browser fetch path 
 ### Software
 - Python ≥ 3.11
 - Playwright + Chromium (`python -m playwright install chromium`)
-- A host with outbound network access (macOS or Linux)
+- A machine with outbound network access (macOS or Linux)
 
-### Metro Fabric — for the `residential` arm
-The `residential` arm routes each fetch through **Metro Fabric egress**, so the request exits from a residential IP in the target region. To run it you need, **per region you want to test**:
+### To compare a hosting / egress provider
+For any host that isn't "this machine," you need, **per region you want to test**:
 
-- **A Metro Fabric egress endpoint** for that region, reachable as `scheme://[user:pass@]host:port`. Put it in `egress.yaml` under `residential.proxies.<REGION>` and list the region in `residential.geos`. Ask your Metro Fabric contact for endpoints in the regions you care about.
+- **An egress endpoint** for that region from the provider, reachable as `scheme://[user:pass@]host:port`. Put it in `egress.yaml` under that host's `proxies.<REGION>`, and list the region in the host's `geos`.
 - **Auth constraint (worth knowing up front):** Chromium can't do username/password auth on SOCKS5 proxies. So the endpoint must be either **(a) an HTTP/HTTPS proxy with basic auth**, or **(b) an endpoint that authorizes you by source IP** (no inline username/password). A username/password SOCKS5 endpoint will silently fail.
 
 ### Optional
-- **Datacenter comparison:** for a fair head-to-head, point the `datacenter` arm at a datacenter-tagged proxy (e.g. an IPXO datacenter IP). With `proxy: null` it uses the host's own IP — only a valid "datacenter" baseline if the host is itself a datacenter box.
-- **Retrieval arm:** Exa and/or Parallel API keys (adapter is built + tested; CLI-wired once keys exist).
+- **Retrieval arm:** Exa and/or Parallel API keys (adapter is built + tested; wired into `run` once keys exist).
 
 ---
 
@@ -53,7 +65,7 @@ python -m playwright install chromium
 ## Quick start
 
 ```bash
-# 1. Run the benchmark against the default 30 sites (writes one line per attempt)
+# 1. Run against the default 30 sites, from the hosts in egress.yaml (one line per attempt)
 site-test run --sites data/sites.yaml --egress data/egress.yaml --out results.jsonl
 
 # 2. Aggregate the raw results into a scorecard
@@ -68,16 +80,47 @@ cat scorecard.json
 | Flag | Default | Meaning |
 |---|---|---|
 | `--sites` | `data/sites.yaml` | the site list to test |
-| `--egress` | `data/egress.yaml` | which arms exist and which regions they can egress from |
-| `--costs` | `data/costs.yaml` | per-arm cost model |
+| `--egress` | `data/egress.yaml` | the hosts to compare + regions each can reach |
+| `--costs` | `data/costs.yaml` | per-host cost model |
 | `--out` | `results.jsonl` | raw output path |
 | `--rate-limit` | `2.0` | minimum seconds between hits to the same domain |
 
 ---
 
+## Configuring hosts — `egress.yaml`
+
+[`data/egress.yaml`](data/egress.yaml) lists the hosts to compare and the regions each can reach:
+
+```yaml
+hosts:
+  this-machine:            # egress from THIS machine's own IP
+    geos: ["US"]           # the region this machine is in — edit to match
+    proxy: null            # run from home, then from a server, to compare
+
+  metro-host:              # a hosting/egress provider you're evaluating
+    geos: ["US", "DE"]
+    proxies:               # one endpoint per region
+      US: "http://user:pass@us.metro-egress:8000"
+      DE: "http://user:pass@de.metro-egress:8000"
+
+retrieval_api:             # optional; not wired into `run` until keys exist
+  provider: "exa"
+```
+
+A site with `requires_geo: DE` is only attempted by a host whose `geos` include `DE`. Everything else for that site → `not_tested`. That's how limited regional coverage stays honest: real numbers where a host can egress, explicit `not_tested` elsewhere. Add regions to a host as its coverage grows — no code change.
+
+**Secrets — do not commit real endpoints.** Provider credentials are secrets. Copy the template to an untracked local file and pass it explicitly:
+
+```bash
+cp data/egress.yaml egress.local.yaml   # gitignored; put real endpoints/creds here
+site-test run --egress egress.local.yaml
+```
+
+---
+
 ## Choosing what to test — the site list
 
-The tool ships with **30 default sites** in [`data/sites.yaml`](data/sites.yaml), spread across the five gating categories. To test **your own** sites, copy that file, edit it, and point `--sites` at it:
+Ships with **30 default sites** in [`data/sites.yaml`](data/sites.yaml), across five gating categories. To test **your own** sites, copy the file, edit it, and point `--sites` at it:
 
 ```bash
 cp data/sites.yaml my-sites.yaml
@@ -87,21 +130,19 @@ site-test run --sites my-sites.yaml --out results.jsonl
 
 ### `sites.yaml` schema
 
-Each entry:
-
 ```yaml
 - id: zalando-de              # unique short id (used in results)
   url: https://www.zalando.de # the exact page to fetch
   region: DE                  # human label for where this site is "from"
   gating_type: anti_fraud     # one of the 5 categories below
-  requires_geo: DE            # the tool only runs arms that can egress from this region
+  requires_geo: DE            # only hosts that can egress from this region test it
   oracle:                     # how we know REAL content loaded (not a block page)
     type: regex               # "regex" or "css"
     match: "Zalando"          # regex: searched in the HTML | css: a selector that must exist
   login_gated_stop: at_wall   # optional; only for login_gated sites (see below)
 ```
 
-**`gating_type`** — the five categories (all represented in the defaults):
+**`gating_type`** — the five categories (all in the defaults):
 
 | Category | Meaning |
 |---|---|
@@ -109,71 +150,31 @@ Each entry:
 | `anti_fraud` | heavy bot-defense (e-commerce, retail, ticketing) |
 | `login_gated` | real content sits behind a login wall |
 | `publisher_cdn` | publisher behind a CDN / soft paywall |
-| `long_tail` | permissive / niche — useful as a baseline that *should* succeed everywhere |
+| `long_tail` | permissive / niche — a baseline that *should* succeed from anywhere |
 
-**`requires_geo`** — the region an arm must be able to egress from to test this site. If no configured arm can egress from that region, the attempt is recorded as `not_tested` (excluded from success rates — never counted as a failure or a fake success).
+**`requires_geo`** — the region a host must reach to test this site. If no configured host covers it, the attempt is `not_tested` (excluded from success rates — never a failure or a fake success).
 
-**`oracle`** — the success test. It must match **only** when the real target content loaded, so a block/captcha/geo-wall page does not score as success:
-- `type: regex` — `match` is a regex searched anywhere in the returned HTML. Good for stable brand/text strings (`"Herman Melville"`, `"Zalando"`).
-- `type: css` — `match` is a CSS selector that must be present (`div.product-price`, `h1`). Good when a specific element only renders on the real page.
+**`oracle`** — the success test. Matches **only** when the real target content loaded, so a block/captcha/geo-wall page does not score as success:
+- `type: regex` — a regex searched in the returned HTML (`"Herman Melville"`, `"Zalando"`).
+- `type: css` — a CSS selector that must be present (`div.product-price`, `h1`).
 
-**`login_gated_stop: at_wall`** — for `login_gated` sites, we measure whether the login page itself loads cleanly (origin not blocked *before* auth). We do **not** log in. Set the oracle to match something on the login page (e.g. the sign-in form/brand).
+**`login_gated_stop: at_wall`** — for `login_gated` sites, we measure whether the login page loads cleanly (host not blocked *before* auth). We do **not** log in. Point the oracle at something on the login page.
 
-> ⚠️ **Tune your oracles.** An oracle that's too strict makes a page that loaded fine score `not_blocked` instead of `content_ok` — under-reporting success. The shipped defaults use best-effort brand/title strings; **validate each against a known-good fetch and adjust** before trusting a site's numbers. Fastest check: run against the `long_tail` baseline first — those should all be `content_ok`; if they're not, your setup (not the site) is the problem.
-
----
-
-## Egress config — which arms run, and where
-
-[`data/egress.yaml`](data/egress.yaml) declares the arms and the regions each can reach:
-
-```yaml
-datacenter:
-  geos: ["US"]            # regions this arm can egress from
-  proxy: null             # null = your local machine; or "http://user:pass@host:port"
-residential:
-  geos: ["US", "DE"]
-  proxies:                # one proxy endpoint per region
-    US: "http://user:pass@us.egress:8000"
-    DE: "http://user:pass@de.egress:8000"
-retrieval_api:
-  provider: "exa"         # see "Retrieval arm" below — not yet wired into `run`
-```
-
-A site with `requires_geo: DE` is only attempted by an arm whose `geos` include `DE`. Everything else for that site → `not_tested`. This is how "limited regions" is handled honestly: you get real numbers for the regions you can actually egress from, and explicit `not_tested` for the rest.
-
----
-
-## Connecting to Metro Fabric
-
-The benchmark is origin-agnostic by design — each arm is just a way to reach a URL. The **`residential` arm is the Metro Fabric integration point.**
-
-**Data path.** The runner (laptop, CI, or a Metro bare-metal box — doesn't matter) launches Chromium and, for the `residential` arm, routes the fetch through the Metro egress endpoint for the site's region. The **egress IP — not the runner's host IP — is what the destination sees and what the benchmark scores.** So you can host the runner anywhere; only the arm's endpoint determines the tested origin.
-
-**Region mapping.** `residential.geos` in `egress.yaml` must match the regions Metro has live egress in. A site whose `requires_geo` isn't covered is `not_tested`. This is how "we only have a few PoPs today" stays honest: real numbers where Metro can egress, explicit `not_tested` elsewhere. As Metro adds PoPs, add regions to `egress.yaml` — no code change.
-
-**What it tells you.** On real gated sites, it shows how much more content you can reliably reach from a residential IP than from a datacenter IP, and how often a retrieval API simply can't return the page at all. The two headline numbers are the `content_ok_rate` gap between `residential` and `datacenter`, and the retrieval `coverage_gap`.
-
-**Secrets — do not commit real endpoints.** Proxy credentials are secrets. Copy the template to an untracked local file and pass it explicitly:
-
-```bash
-cp data/egress.yaml egress.local.yaml   # gitignored; put real Metro endpoints/creds here
-site-test run --egress egress.local.yaml
-```
+> ⚠️ **Tune your oracles.** An oracle that's too strict makes a page that loaded fine score `not_blocked` instead of `content_ok` — under-reporting success. The defaults use best-effort brand/title strings; **validate each and adjust** before trusting a site's numbers. Fastest check: run the `long_tail` baseline first — those should all be `content_ok`; if not, it's your setup, not the site.
 
 ---
 
 ## Cost config
 
-[`data/costs.yaml`](data/costs.yaml) — per-arm pricing, used to compute cost-per-success:
+[`data/costs.yaml`](data/costs.yaml) — per-host pricing (keyed by the host names in `egress.yaml`), used to compute cost-per-successful-fetch:
 
 ```yaml
-datacenter:    { usd_per_gb: 0.0, usd_per_req: 0.0 }
-residential:     { usd_per_gb: 8.0, usd_per_req: 0.0 }   # usd_per_gb = dollars per GiB
+this-machine:  { usd_per_gb: 0.0, usd_per_req: 0.0 }
+metro-host:    { usd_per_gb: 8.0, usd_per_req: 0.0 }   # usd_per_gb = dollars per GiB
 retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 ```
 
-(Shipped values are placeholders — replace with your real rates before quoting cost numbers.)
+(Placeholders — replace with real rates before quoting cost numbers.)
 
 ---
 
@@ -182,13 +183,13 @@ retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 ### `results.jsonl` — one line per attempt
 
 ```json
-{"site_id": "zalando-de", "arm": "residential", "geo": "DE", "outcome": "content_ok",
+{"site_id": "zalando-de", "arm": "metro-host", "geo": "DE", "outcome": "content_ok",
  "latency_ms": 812, "bytes": 48211, "cost_usd": 0.0007, "ts": "2026-07-30T20:10:00Z", "notes": ""}
 ```
 
 | Field | Meaning |
 |---|---|
-| `site_id` / `arm` / `geo` | which site, which origin type, which region |
+| `site_id` / `arm` / `geo` | which site, which host, which region (`arm` = the host name) |
 | `outcome` | the tier (below) |
 | `latency_ms` | fetch time (null if not tested / errored) |
 | `bytes` | size of returned HTML |
@@ -197,7 +198,7 @@ retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
 
 ### Outcome tiers
 
-Direct arms (`datacenter`, `residential`), best → worst:
+Hosts, best → worst:
 
 | Outcome | Meaning |
 |---|---|
@@ -205,7 +206,7 @@ Direct arms (`datacenter`, `residential`), best → worst:
 | `not_blocked` | page loaded, not a block page, but the oracle didn't match (check your oracle) |
 | `reachable` | got a response, but it's a block/captcha/geo-wall page **or** an HTTP error status |
 | `unreachable` | no usable response (timeout, connection error, crash) |
-| `not_tested` | no configured arm could egress from this site's region — excluded from all rates |
+| `not_tested` | no configured host could egress from this site's region — excluded from all rates |
 
 Retrieval arm: `content_ok` (returned usable content) or `no_coverage` (couldn't return the target).
 
@@ -214,29 +215,29 @@ Retrieval arm: `content_ok` (returned usable content) or `no_coverage` (couldn't
 ```json
 {
   "arms": {
-    "datacenter": {
+    "server": {
       "tested": 24, "not_tested": 6, "total_cost": 0.0,
       "unreachable": 3, "reachable": 9, "not_blocked": 2, "content_ok": 10,
       "content_ok_rate": 0.4167, "cost_per_content_ok": 0.0
     },
-    "residential": { "...": "..." }
+    "metro-host": { "...": "..." }
   },
   "coverage_gap": { "tested": 30, "no_coverage": 11, "gap_rate": 0.3667 }
 }
 ```
 
-- **`content_ok_rate`** — the headline success number per arm (`content_ok / tested`; `not_tested` excluded from the denominator).
-- **`cost_per_content_ok`** — dollars per successful fetch (`null` if the arm had zero successes). This is the "do we beat X on success *and* cost" number.
-- **`coverage_gap`** — share of targets the retrieval API could **not** return at all. A high gap is the signal that direct egress is needed for those targets.
+- **`content_ok_rate`** — the headline success number per host (`content_ok / tested`; `not_tested` excluded from the denominator). **This is what you compare between hosts to pick where to run.**
+- **`cost_per_content_ok`** — dollars per successful fetch (`null` if the host had zero successes).
+- **`coverage_gap`** — share of targets the retrieval API could **not** return at all.
 
 ---
 
 ## Retrieval arm status
 
-The `RetrievalApiAdapter` is implemented and unit-tested, but the CLI wires only the two direct arms until Exa / Parallel credentials exist. To enable it, build a `RetrievalClient` (`Callable[[str], Optional[str]]`) around the provider SDK and add a `RetrievalApiAdapter(client=...)` to the adapter list in `cli._build_direct_adapters`.
+The `RetrievalApiAdapter` is implemented and unit-tested, but `run` wires only the hosts under `egress.yaml`'s `hosts:` until Exa / Parallel credentials exist. To enable it, build a `RetrievalClient` (`Callable[[str], Optional[str]]`) around the provider SDK and add a `RetrievalApiAdapter(client=...)` to the adapter list in `cli._build_host_adapters`.
 
 ## Tests
 
 ```bash
-pytest      # 39 passing
+pytest      # 40 passing
 ```

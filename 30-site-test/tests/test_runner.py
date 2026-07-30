@@ -1,8 +1,8 @@
 from site_test.models import Site, Oracle, RawResult
 from site_test.runner import run_attempts
 
-COSTS = {"datacenter": {"usd_per_gb": 0.0, "usd_per_req": 0.0},
-         "residential": {"usd_per_gb": 8.0, "usd_per_req": 0.0},
+COSTS = {"server": {"usd_per_gb": 0.0, "usd_per_req": 0.0},
+         "metro-host": {"usd_per_gb": 8.0, "usd_per_req": 0.0},
          "retrieval_api": {"usd_per_gb": 0.0, "usd_per_req": 0.005}}
 
 class FakeAdapter:
@@ -17,7 +17,7 @@ def make_site():
 
 def test_geo_unsupported_is_not_tested():
     site = make_site()
-    dc = FakeAdapter("datacenter", "direct", geos=["US"],
+    dc = FakeAdapter("server", "direct", geos=["US"],
                      result=RawResult(status=200, html="PRICE", latency_ms=5, bytes=5))
     attempts = run_attempts([site], [dc], COSTS, rate_limit_s=0)
     assert len(attempts) == 1
@@ -26,7 +26,7 @@ def test_geo_unsupported_is_not_tested():
 
 def test_direct_content_ok_scored_and_costed():
     site = make_site()
-    isp = FakeAdapter("residential", "direct", geos=["DE"],
+    isp = FakeAdapter("metro-host", "direct", geos=["DE"],
                       result=RawResult(status=200, html="the PRICE is here", latency_ms=7, bytes=1_073_741_824))
     attempts = run_attempts([site], [isp], COSTS, rate_limit_s=0)
     assert attempts[0].outcome == "content_ok"
@@ -42,7 +42,7 @@ def test_retrieval_coverage_scored():
 
 def test_block_page_scored_reachable():
     site = make_site()
-    isp = FakeAdapter("residential", "direct", geos=["DE"],
+    isp = FakeAdapter("metro-host", "direct", geos=["DE"],
                       result=RawResult(status=200, html="Just a moment...", latency_ms=7, bytes=15))
     attempts = run_attempts([site], [isp], COSTS, rate_limit_s=0)
     assert attempts[0].outcome == "reachable"
@@ -52,7 +52,7 @@ def test_bad_oracle_becomes_unreachable_not_crash():
     # attempt, not abort the whole run.
     site = Site(id="s1", url="https://x.test", region="DE", gating_type="anti_fraud",
                 requires_geo="DE", oracle=Oracle(type="css", match="::::"))
-    isp = FakeAdapter("residential", "direct", geos=["DE"],
+    isp = FakeAdapter("metro-host", "direct", geos=["DE"],
                       result=RawResult(status=200, html="<html><body>hi</body></html>", latency_ms=5, bytes=5))
     attempts = run_attempts([site], [isp], COSTS, rate_limit_s=0)
     assert attempts[0].outcome == "unreachable"
@@ -66,7 +66,7 @@ def test_rate_limit_throttles_same_domain(monkeypatch):
               requires_geo="US", oracle=Oracle(type="regex", match="ok"))
     s2 = Site(id="b", url="https://dom.test/2", region="US", gating_type="long_tail",
               requires_geo="US", oracle=Oracle(type="regex", match="ok"))
-    dc = FakeAdapter("datacenter", "direct", geos=["US"],
+    dc = FakeAdapter("server", "direct", geos=["US"],
                      result=RawResult(status=200, html="ok", latency_ms=1, bytes=2))
     run_attempts([s1, s2], [dc], COSTS, rate_limit_s=5)
     assert any(x > 0 for x in slept)  # second same-domain hit was throttled
