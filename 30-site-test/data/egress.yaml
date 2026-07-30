@@ -1,0 +1,31 @@
+# Each entry under `hosts:` is a place your agent could run / egress from.
+# Compare as many as you like, then see which keeps your agent deliverable.
+#
+# Every host names a `connector` — the thing that turns config/credentials into
+# a working egress. Connectors: local | http_proxy | metro (see README).
+
+hosts:
+  this-machine:            # your own IP — run from home, then from a server
+    connector: local
+    geos: ["US"]           # the region THIS machine egresses from — edit to match
+
+  metro:                   # Metro Fabric egress
+    connector: metro
+    geos: ["US", "DE"]
+    account: "your-metro-account"
+    api_key_env: METRO_API_KEY   # export METRO_API_KEY=...  (never commit the key)
+    endpoints:                   # provided by your Metro Fabric contact
+      US: "http://us.metro-egress:8000"
+      DE: "http://de.metro-egress:8000"
+
+  # A plain cloud/datacenter proxy you already have:
+  # aws-server:
+  #   connector: http_proxy
+  #   geos: ["US"]
+  #   proxies:
+  #     US: "http://user:pass@us.datacenter:8000"
+
+# Optional: skip hosting a fetcher and use a retrieval API instead.
+# Not wired into `run` until Exa/Parallel credentials exist.
+retrieval_api:
+  provider: "exa"

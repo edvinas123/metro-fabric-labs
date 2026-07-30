@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+results.jsonl
+scorecard.json
+egress.local.yaml

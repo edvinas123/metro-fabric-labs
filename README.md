@@ -36,8 +36,8 @@ Status: `[ ]` idea · `[~]` in progress · `[x]` shipped
 
 - [ ] **`whoami-agent`** — Public endpoint + embeddable widget (an `ipinfo.io` for agents) that returns the calling agent's verified identity, ISP-ORG tag, geo, and reputation. The clearest one-glance demo of legs + passport.
   <br>*Shows off: identity + clean ISP origin, live.*
-- [ ] **`the-30-site-test`** — Open benchmark harness: a weighted set of non-US / geo-restricted / gated sites, comparing datacenter vs clean-ISP egress on success rate and cost. Publishing this is both a validation gate and a credibility artifact.
-  <br>*Shows off: coverage + origin quality, measured in the open.*
+- [~] **`the-30-site-test`** — A deliverability test for AI agents before production: fetch real geo-restricted/gated sites from each host you might run on (your machine, a cloud server, any hosting/egress provider) and compare success rate + cost, so you can choose where to host. Provider-neutral; Metro Fabric plugs in as one host. *(Framework + connectors built and tested; plug in any proxy to run it today — full provider comparison pending a live egress endpoint.)*
+  <br>*Shows off: agent deliverability, host/provider comparison, measured in the open.*
 - [ ] **`agents.txt`** — A spec + hosted registry where sites declare their agent-access policy and pricing; agents query it before fetching. `robots.txt` for the agent economy — the connective tissue between identity and settlement.
   <br>*Shows off: policy discovery, settlement on-ramp.*
 

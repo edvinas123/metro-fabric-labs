@@ -1,0 +1,27 @@
+[project]
+name = "site-test"
+version = "0.1.0"
+description = "the-30-site-test — open access benchmark"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright>=1.44",
+    "beautifulsoup4>=4.12",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+site-test = "site_test.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

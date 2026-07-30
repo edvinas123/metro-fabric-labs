@@ -1,0 +1,6 @@
+# Per-host cost model, keyed by the host names you use in egress.yaml.
+# Used to compute cost-per-successful-fetch. Replace with your real rates.
+# `usd_per_gb` means dollars per GiB of returned content.
+this-machine:  { usd_per_gb: 0.0, usd_per_req: 0.0 }
+metro:         { usd_per_gb: 8.0, usd_per_req: 0.0 }
+retrieval_api: { usd_per_gb: 0.0, usd_per_req: 0.005 }
