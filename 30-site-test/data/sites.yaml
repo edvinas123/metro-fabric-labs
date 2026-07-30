@@ -1,25 +1,205 @@
+# the-30-site-test — default site list (30 sites across 5 gating categories).
+#
+# This is a STARTER list. The `oracle` for each site is a best-effort brand/title
+# string; validate and adjust it against a known-good fetch before trusting a
+# site's numbers (see README "Tune your oracles"). `requires_geo` is the region an
+# egress arm must reach to test the site; sites in regions you can't egress from
+# are recorded as `not_tested`, not failures.
+#
+# gating_type: geo_restricted | anti_fraud | login_gated | publisher_cdn | long_tail
+
+# ── long_tail — permissive baseline (should be content_ok from any origin) ──────
 - id: example-open
   url: https://example.com/
   region: US
   gating_type: long_tail
   requires_geo: US
-  oracle:
-    type: css
-    match: "h1"
+  oracle: { type: css, match: "h1" }
 - id: httpbin-html
   url: https://httpbin.org/html
   region: US
   gating_type: long_tail
   requires_geo: US
-  oracle:
-    type: regex
-    match: "Herman Melville"
-- id: example-shop-de
-  url: https://example.de/product/123
+  oracle: { type: regex, match: "Herman Melville" }
+- id: wikipedia-scraping
+  url: https://en.wikipedia.org/wiki/Web_scraping
+  region: US
+  gating_type: long_tail
+  requires_geo: US
+  oracle: { type: regex, match: "Web scraping" }
+- id: hacker-news
+  url: https://news.ycombinator.com/
+  region: US
+  gating_type: long_tail
+  requires_geo: US
+  oracle: { type: regex, match: "Hacker News" }
+- id: mdn-web-docs
+  url: https://developer.mozilla.org/en-US/
+  region: US
+  gating_type: long_tail
+  requires_geo: US
+  oracle: { type: regex, match: "MDN" }
+- id: python-docs
+  url: https://docs.python.org/3/
+  region: US
+  gating_type: long_tail
+  requires_geo: US
+  oracle: { type: regex, match: "Python" }
+
+# ── geo_restricted — regional broadcasters / media ──────────────────────────────
+- id: bbc-news-gb
+  url: https://www.bbc.co.uk/news
+  region: GB
+  gating_type: geo_restricted
+  requires_geo: GB
+  oracle: { type: regex, match: "BBC" }
+- id: rai-it
+  url: https://www.rai.it/
+  region: IT
+  gating_type: geo_restricted
+  requires_geo: IT
+  oracle: { type: regex, match: "Rai" }
+- id: abc-au
+  url: https://www.abc.net.au/
+  region: AU
+  gating_type: geo_restricted
+  requires_geo: AU
+  oracle: { type: regex, match: "ABC" }
+- id: cbc-ca
+  url: https://www.cbc.ca/
+  region: CA
+  gating_type: geo_restricted
+  requires_geo: CA
+  oracle: { type: regex, match: "CBC" }
+- id: nhk-jp
+  url: https://www.nhk.or.jp/
+  region: JP
+  gating_type: geo_restricted
+  requires_geo: JP
+  oracle: { type: regex, match: "NHK" }
+- id: francetv-fr
+  url: https://www.france.tv/
+  region: FR
+  gating_type: geo_restricted
+  requires_geo: FR
+  oracle: { type: regex, match: "france" }
+
+# ── anti_fraud — e-commerce / retail with heavy bot defense ─────────────────────
+- id: bestbuy-us
+  url: https://www.bestbuy.com/
+  region: US
+  gating_type: anti_fraud
+  requires_geo: US
+  oracle: { type: regex, match: "Best Buy" }
+- id: walmart-us
+  url: https://www.walmart.com/
+  region: US
+  gating_type: anti_fraud
+  requires_geo: US
+  oracle: { type: regex, match: "Walmart" }
+- id: target-us
+  url: https://www.target.com/
+  region: US
+  gating_type: anti_fraud
+  requires_geo: US
+  oracle: { type: regex, match: "Target" }
+- id: otto-de
+  url: https://www.otto.de/
   region: DE
   gating_type: anti_fraud
   requires_geo: DE
-  oracle:
-    type: css
-    match: "div.product-price"
-  login_gated_stop: null
+  oracle: { type: regex, match: "otto" }
+- id: zalando-de
+  url: https://www.zalando.de/
+  region: DE
+  gating_type: anti_fraud
+  requires_geo: DE
+  oracle: { type: regex, match: "Zalando" }
+- id: mercadolibre-ar
+  url: https://www.mercadolibre.com.ar/
+  region: AR
+  gating_type: anti_fraud
+  requires_geo: AR
+  oracle: { type: regex, match: "Mercado" }
+
+# ── login_gated — score reachability of the login wall only (no auth) ───────────
+- id: linkedin
+  url: https://www.linkedin.com/
+  region: US
+  gating_type: login_gated
+  requires_geo: US
+  oracle: { type: regex, match: "LinkedIn" }
+  login_gated_stop: at_wall
+- id: instagram
+  url: https://www.instagram.com/
+  region: US
+  gating_type: login_gated
+  requires_geo: US
+  oracle: { type: regex, match: "Instagram" }
+  login_gated_stop: at_wall
+- id: x-twitter
+  url: https://x.com/
+  region: US
+  gating_type: login_gated
+  requires_geo: US
+  oracle: { type: regex, match: "Sign in" }
+  login_gated_stop: at_wall
+- id: facebook
+  url: https://www.facebook.com/
+  region: US
+  gating_type: login_gated
+  requires_geo: US
+  oracle: { type: regex, match: "Facebook" }
+  login_gated_stop: at_wall
+- id: reddit
+  url: https://www.reddit.com/
+  region: US
+  gating_type: login_gated
+  requires_geo: US
+  oracle: { type: regex, match: "reddit" }
+  login_gated_stop: at_wall
+- id: quora
+  url: https://www.quora.com/
+  region: US
+  gating_type: login_gated
+  requires_geo: US
+  oracle: { type: regex, match: "Quora" }
+  login_gated_stop: at_wall
+
+# ── publisher_cdn — publishers behind a CDN / soft paywall ──────────────────────
+- id: nytimes
+  url: https://www.nytimes.com/
+  region: US
+  gating_type: publisher_cdn
+  requires_geo: US
+  oracle: { type: regex, match: "New York Times" }
+- id: wsj
+  url: https://www.wsj.com/
+  region: US
+  gating_type: publisher_cdn
+  requires_geo: US
+  oracle: { type: regex, match: "Wall Street Journal" }
+- id: guardian-gb
+  url: https://www.theguardian.com/
+  region: GB
+  gating_type: publisher_cdn
+  requires_geo: GB
+  oracle: { type: regex, match: "Guardian" }
+- id: lemonde-fr
+  url: https://www.lemonde.fr/
+  region: FR
+  gating_type: publisher_cdn
+  requires_geo: FR
+  oracle: { type: regex, match: "Monde" }
+- id: spiegel-de
+  url: https://www.spiegel.de/
+  region: DE
+  gating_type: publisher_cdn
+  requires_geo: DE
+  oracle: { type: regex, match: "SPIEGEL" }
+- id: economist-gb
+  url: https://www.economist.com/
+  region: GB
+  gating_type: publisher_cdn
+  requires_geo: GB
+  oracle: { type: regex, match: "Economist" }
