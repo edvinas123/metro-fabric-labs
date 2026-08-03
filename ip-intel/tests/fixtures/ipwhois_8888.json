@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "ip": "8.8.8.8",
+  "country": "United States",
+  "region": "Virginia",
+  "city": "Ashburn",
+  "connection": {"asn": 15169, "org": "Google LLC", "isp": "Google LLC"}
+}

@@ -34,7 +34,9 @@ Status: `[ ]` idea · `[~]` in progress · `[x]` shipped
 
 ### Tier 2 — Prove it works (demos & benchmarks)
 
-- [ ] **`whoami-agent`** — Public endpoint + embeddable widget (an `ipinfo.io` for agents) that returns the calling agent's verified identity, ISP-ORG tag, geo, and reputation. The clearest one-glance demo of legs + passport.
+- [x] **`ip-intel`** — One-command IP information report: ownership (RDAP/WHOIS), abuse/reputation (blocklists, Tor, abuse contact), geolocation (multi-source), and BGP announcement (origin ASN, prefix, RPKI). Adds an **origin verdict** — ISP-ORG vs datacenter vs mobile — the trust-anchor signal from principle #6. Free public sources, no key required. The reusable lookup core that `whoami-agent` sits on. → [`ip-intel/`](ip-intel/)
+  <br>*Shows off: ISP-ORG as trust anchor, origin quality made measurable.*
+- [~] **`whoami-agent`** — Public endpoint + embeddable widget (an `ipinfo.io` for agents) that returns the calling agent's verified identity, ISP-ORG tag, geo, and reputation. The clearest one-glance demo of legs + passport. Identity/geo/reputation lookups are done by **`ip-intel`** (`ipintel whoami`); what remains is the hosted HTTP endpoint + embeddable widget.
   <br>*Shows off: identity + clean ISP origin, live.*
 - [ ] **`the-30-site-test`** — Open benchmark harness: a weighted set of non-US / geo-restricted / gated sites, comparing datacenter vs clean-ISP egress on success rate and cost. Publishing this is both a validation gate and a credibility artifact.
   <br>*Shows off: coverage + origin quality, measured in the open.*
@@ -69,6 +71,8 @@ Skills that let an operator drive Metro infra from an agent session. Each is a `
 - [ ] **`metro-deploy`** — Deploy an agent onto the Metro ephemeral runtime and stream its Certificate of Origin.
 - [ ] **`metro-status`** — PoP health, latency, and IP-pool availability at a glance.
 - [ ] **`metro-30site`** — Run the 30-site coverage/success benchmark and emit a scorecard.
+- [x] **`ip-intel`** — Full IP report (ownership / abuse / geo / announcement) for any address, from a Claude session. Shipped in [`ip-intel/.claude/skills/ip-intel/`](ip-intel/.claude/skills/ip-intel/SKILL.md).
+- [x] **`origin-classify`** — Verdict on whether an IP is a clean ISP-ORG origin vs datacenter/mobile/reserved — the trust-anchor check for principle #6. Shipped in [`ip-intel/.claude/skills/origin-classify/`](ip-intel/.claude/skills/origin-classify/SKILL.md).
 
 ---
 
@@ -79,6 +83,7 @@ Each project graduates to its own repo under a `metro-fabric` GitHub org. This r
 ```
 labs/                 # this index (build list + task tracker)
   README.md
+ip-intel/             # ✅ built here — IP report core + agent/skills (this repo)
 metro-fabric/agent-passport      # → own repo when it graduates
 metro-fabric/metro-mcp           # → own repo
 metro-fabric/passport-verifier   # → own repo
