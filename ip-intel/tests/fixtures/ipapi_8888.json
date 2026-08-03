@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "country": "United States",
+  "regionName": "Virginia",
+  "city": "Ashburn",
+  "lat": 39.03,
+  "lon": -77.5,
+  "timezone": "America/New_York",
+  "isp": "Google LLC",
+  "org": "Google Public DNS",
+  "as": "AS15169 Google LLC",
+  "mobile": false,
+  "proxy": false,
+  "hosting": true,
+  "query": "8.8.8.8"
+}
