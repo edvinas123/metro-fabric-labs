@@ -41,3 +41,33 @@ def test_no_signal_is_unknown():
                   Geo(isp="Acme"), Abuse())
     assert oc.kind == UNKNOWN
     assert oc.confidence == "low"
+
+
+def test_peeringdb_isp_type_wins():
+    oc = classify(Ownership(organization="Acme"), Geo(), Abuse(),
+                  peeringdb_type="Cable/DSL/ISP")
+    assert oc.kind == ISP_ORG
+    assert oc.confidence == "high"
+
+
+def test_peeringdb_content_type_is_datacenter():
+    # RAKsmart / AS54600 case: PeeringDB info_type 'Content'.
+    oc = classify(Ownership(organization="PEG TECH INC"),
+                  Geo(isp="PEG TECH INC"), Abuse(), peeringdb_type="Content")
+    assert oc.kind == DATACENTER
+    assert oc.confidence == "high"
+
+
+def test_proxy_flag_is_datacenter():
+    # No PeeringDB type, no hosting flag, but proxy=True (the 108.186.55.1 case).
+    oc = classify(Ownership(organization="PEG TECH INC"),
+                  Geo(isp="PEG TECH INC", proxy_vpn=True), Abuse())
+    assert oc.kind == DATACENTER
+    assert "proxy/VPN" in oc.rationale
+
+
+def test_hosting_brand_keyword_fallback():
+    # Even with no flags/PeeringDB, known hosting brands now match keywords.
+    oc = classify(Ownership(organization="RAKsmart"),
+                  Geo(isp="RAKsmart"), Abuse())
+    assert oc.kind == DATACENTER

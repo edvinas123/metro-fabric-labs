@@ -54,6 +54,7 @@ def lookup(
     dns: DnsResolver,
     tor_get: Optional[Callable[[], str]] = None,
     abuseipdb: Optional[Callable[[str], dict]] = None,
+    scamalytics: Optional[Callable[[str], dict]] = None,
     abuse_email: Optional[str] = None,
 ) -> Abuse:
     obj = ipaddress.ip_address(ip)
@@ -104,5 +105,15 @@ def lookup(
             out.sources.append("abuseipdb")
         except Exception as e:  # noqa: BLE001
             out.errors.append(f"abuseipdb failed: {e}")
+
+    # Optional Scamalytics fraud score.
+    if scamalytics is not None:
+        try:
+            data = scamalytics(ip) or {}
+            out.fraud_score = data.get("score")
+            out.fraud_risk = data.get("risk")
+            out.sources.append("scamalytics")
+        except Exception as e:  # noqa: BLE001
+            out.errors.append(f"scamalytics failed: {e}")
 
     return out

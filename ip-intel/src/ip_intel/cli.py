@@ -3,32 +3,30 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
-import os
 import sys
 from pathlib import Path
 
+from . import providers
 from .net import HttpClient
 from .report import EXT, RENDERERS, build_report
 from .whoami import whoami
 
+TOR_EXIT_LIST = "https://check.torproject.org/torbulkexitlist"
 SUBCOMMANDS = {"report", "whoami"}
 
 
-def _abuseipdb_client(http: HttpClient):
-    """Return an AbuseIPDB check callable if a free key is in the env, else None."""
-    key = os.environ.get("ABUSEIPDB_KEY")
-    if not key:
-        return None
-
-    def check(ip: str) -> dict:
-        data = http.get_json(
-            "https://api.abuseipdb.com/api/v2/check",
-            params={"ipAddress": ip, "maxAgeInDays": 90},
-            headers={"Key": key, "Accept": "application/json"},
-        )
-        return data.get("data", {})
-
-    return check
+def _provider_kwargs(http: HttpClient) -> dict:
+    """Assemble every injectable for build_report: the always-on network access
+    plus each optional enrichment that is actually configured (key/DB present)."""
+    return {
+        "fetch_json": http.get_json,
+        "tor_get": lambda: http.get_text(TOR_EXIT_LIST),
+        "abuseipdb": providers.make_abuseipdb(http.get_json),
+        "scamalytics": providers.make_scamalytics(http.get_json),
+        "maxmind": providers.make_maxmind(),
+        "ip2location": providers.make_ip2location(),
+        "peeringdb": providers.make_peeringdb(http.get_json),
+    }
 
 
 def _resolve_target(token: str) -> tuple[str, str | None]:
@@ -66,7 +64,7 @@ def cmd_report(args) -> int:
             return 2
 
     http = HttpClient()
-    abuseipdb = _abuseipdb_client(http)
+    provider_kwargs = _provider_kwargs(http)
     tokens = _targets(args)
     if not tokens:
         print("no IPs given", file=sys.stderr)
@@ -86,10 +84,7 @@ def cmd_report(args) -> int:
             print(f"# {note}", file=sys.stderr)
 
         try:
-            report = build_report(ip, fetch_json=http.get_json,
-                                  tor_get=lambda: http.get_text(
-                                      "https://check.torproject.org/torbulkexitlist"),
-                                  abuseipdb=abuseipdb)
+            report = build_report(ip, **provider_kwargs)
         except ValueError as e:
             print(f"skipping {token!r}: {e}", file=sys.stderr)
             continue
@@ -107,10 +102,8 @@ def cmd_report(args) -> int:
 
 def cmd_whoami(args) -> int:
     http = HttpClient()
-    result = whoami(args.ip, fetch_json=http.get_json,
-                    tor_get=lambda: http.get_text(
-                        "https://check.torproject.org/torbulkexitlist"),
-                    abuseipdb=_abuseipdb_client(http))
+    # whoami() consumes fetch_json itself and forwards the rest to build_report.
+    result = whoami(args.ip, **_provider_kwargs(http))
     print(json.dumps(result, indent=2))
     return 0
 

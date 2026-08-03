@@ -37,3 +37,12 @@ def test_abuseipdb_enrichment(fake_dns, tor_get):
     a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get, abuseipdb=check)
     assert a.abuse_confidence == 42
     assert any("7 reports" in c for c in a.report_categories)
+
+
+def test_scamalytics_enrichment(fake_dns, tor_get):
+    def scam(ip):
+        return {"score": 63, "risk": "high"}
+    a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get, scamalytics=scam)
+    assert a.fraud_score == 63
+    assert a.fraud_risk == "high"
+    assert "scamalytics" in a.sources

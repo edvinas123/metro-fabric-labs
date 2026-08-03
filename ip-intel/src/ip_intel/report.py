@@ -33,6 +33,10 @@ def build_report(
     dns: Optional[DnsResolver] = None,
     tor_get: Optional[Callable[[], str]] = None,
     abuseipdb: Optional[Callable[[str], dict]] = None,
+    scamalytics: Optional[Callable[[str], dict]] = None,
+    maxmind: Optional[Callable[[str], dict]] = None,
+    ip2location: Optional[Callable[[str], dict]] = None,
+    peeringdb: Optional[Callable[[int], Optional[str]]] = None,
     now: Optional[str] = None,
 ) -> IPReport:
     ipaddress.ip_address(ip)  # raises ValueError on malformed input
@@ -44,11 +48,16 @@ def build_report(
     dns = dns or SocketDns()
 
     ownership = own_mod.lookup(ip, fetch_json)
-    geo = geo_mod.lookup(ip, fetch_json)
+    geo = geo_mod.lookup(ip, fetch_json, maxmind=maxmind, ip2location=ip2location,
+                         registrant_country=ownership.country)
     announcement = ann_mod.lookup(ip, fetch_json)
-    abuse = abuse_mod.lookup(ip, dns=dns, tor_get=tor_get,
-                             abuseipdb=abuseipdb, abuse_email=ownership.abuse_email)
-    origin = classify(ownership, geo, abuse)
+    abuse = abuse_mod.lookup(ip, dns=dns, tor_get=tor_get, abuseipdb=abuseipdb,
+                             scamalytics=scamalytics, abuse_email=ownership.abuse_email)
+
+    # ASN → PeeringDB network type feeds the origin verdict (strongest signal).
+    asn = announcement.origin_asn or geo.asn
+    peeringdb_type = peeringdb(asn) if (peeringdb and asn) else None
+    origin = classify(ownership, geo, abuse, peeringdb_type=peeringdb_type)
 
     return IPReport(
         ip=ip, generated_at=now or _now_iso(),
@@ -101,6 +110,8 @@ def render_markdown(r: IPReport) -> str:
         ("Tor exit node", a.tor_exit_node), ("Bogon / special-use", a.special_use or "no"),
         ("Abuse confidence", a.abuse_confidence),
         ("Reports", ", ".join(a.report_categories)),
+        ("Scamalytics fraud", f"{a.fraud_score} ({a.fraud_risk})"
+                              if a.fraud_score is not None else None),
     ]:
         L.append(f"| {label} | {_v(val)} |")
     L.append(f"\n*sources: {_v(', '.join(a.sources))}*")
@@ -112,9 +123,14 @@ def render_markdown(r: IPReport) -> str:
     L.append("|---|---|")
     for label, val in [
         ("Country", g.country), ("Region", g.region), ("City", g.city),
+        ("Postal", g.postal),
         ("Lat / Lon", f"{g.latitude}, {g.longitude}" if g.latitude is not None else None),
         ("Timezone", g.timezone), ("ISP", g.isp), ("Org", g.org),
+        ("ASN", f"AS{g.asn}" if g.asn else None),
         ("Connection", g.connection_type),
+        ("Proxy / VPN", g.proxy_vpn),
+        ("Country by source", ", ".join(f"{s}={c}" for s, c in g.by_source.items())
+                              if g.by_source else None),
     ]:
         L.append(f"| {label} | {_v(val)} |")
     if g.disagreements:

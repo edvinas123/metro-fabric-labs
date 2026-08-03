@@ -11,6 +11,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+maxmind = ["geoip2>=4.8"]
+ip2location = ["IP2Location>=8.10"]
 
 [project.scripts]
 ipintel = "ip_intel.cli:main"

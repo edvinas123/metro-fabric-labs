@@ -43,6 +43,8 @@ class Abuse:
     special_use: Optional[str] = None       # e.g. "private", "reserved", "loopback"
     abuse_confidence: Optional[int] = None  # AbuseIPDB score 0-100 (if key present)
     report_categories: list[str] = field(default_factory=list)
+    fraud_score: Optional[int] = None       # Scamalytics 0-100 (if key present)
+    fraud_risk: Optional[str] = None         # Scamalytics risk band (low/medium/high/very high)
     sources: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -53,12 +55,16 @@ class Geo:
     country: Optional[str] = None
     region: Optional[str] = None
     city: Optional[str] = None
+    postal: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     timezone: Optional[str] = None
     isp: Optional[str] = None
     org: Optional[str] = None
+    asn: Optional[int] = None
     connection_type: Optional[str] = None   # hosting / mobile / residential when known
+    proxy_vpn: Optional[bool] = None        # proxy / VPN / anonymizer flag
+    by_source: dict[str, str] = field(default_factory=dict)  # provider -> country
     disagreements: list[str] = field(default_factory=list)  # cross-source conflicts
     sources: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

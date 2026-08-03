@@ -5,21 +5,34 @@ from __future__ import annotations
 Design principle #6: *ISP-ORG is the trust anchor. A cert bound to a confirmed
 ISP-ORG range carries real identity weight; a datacenter-IP cert does not.*
 
-This turns the raw ownership/geo signals into a single verdict — is this IP a
-clean ISP/carrier origin, a datacenter, mobile, or reserved — with a short
-rationale and what it means for a Certificate of Origin. It is a **heuristic**
-(keyword + provider-flag based), clearly labelled as such; it is a signal to
-weight a cert, never a substitute for a confirmed ISP-ORG range.
+Signal precedence (strongest first):
+  1. bogon / special-use        → reserved
+  2. PeeringDB AS network type  → authoritative-ish: ISP vs Content/hosting
+  3. geo provider `hosting` flag → datacenter
+  4. geo proxy/VPN flag         → datacenter/anon egress
+  5. mobile indicators          → mobile
+  6. ownership/geo name keywords → last-resort fallback
+
+It remains a **heuristic** — a signal to weight a Certificate of Origin, never a
+substitute for a confirmed ISP-ORG range.
 """
+
+from typing import Optional
 
 from .models import (Abuse, Geo, Ownership, OriginClass,
                      ISP_ORG, DATACENTER, MOBILE, RESERVED, UNKNOWN)
+
+# PeeringDB `info_type` → our origin class.
+_PEERINGDB_ISP = {"Cable/DSL/ISP", "NSP"}
+_PEERINGDB_DC = {"Content", "Enterprise", "Educational/Research",
+                 "Non-Profit", "Route Server"}
 
 _DC_KEYWORDS = (
     "hosting", "datacenter", "data center", "data-center", "cloud", "vps",
     "server", "colo", "colocation", "dedicated", "amazon", "aws", "google",
     "microsoft", "azure", "digitalocean", "linode", "ovh", "hetzner", "vultr",
     "leaseweb", "contabo", "scaleway", "oracle", "cloudflare", "fastly",
+    "raksmart", "peg tech", "petaexpress", "tencent", "alibaba",
 )
 _ISP_KEYWORDS = (
     "telecom", "telecommunication", "communications", "broadband", "cable",
@@ -35,31 +48,52 @@ def _text(*parts: str | None) -> str:
     return " ".join(p.lower() for p in parts if p)
 
 
-def classify(ownership: Ownership, geo: Geo, abuse: Abuse) -> OriginClass:
+def classify(ownership: Ownership, geo: Geo, abuse: Abuse, *,
+             peeringdb_type: Optional[str] = None) -> OriginClass:
     if abuse.is_bogon:
         return OriginClass(
             kind=RESERVED, confidence="high",
             rationale=f"special-use / non-global address ({abuse.special_use})",
             trust_note="Not routable public space — cannot anchor a Certificate of Origin.")
 
-    blob = _text(ownership.organization, ownership.network_name,
-                 geo.isp, geo.org)
+    # 2. PeeringDB AS network type — the strongest available signal.
+    if peeringdb_type in _PEERINGDB_ISP:
+        return OriginClass(
+            kind=ISP_ORG, confidence="high",
+            rationale=f"PeeringDB AS type '{peeringdb_type}'",
+            trust_note="Clean ISP-ORG origin — the trust anchor; a cert here carries real weight (principle #6).")
+    if peeringdb_type in _PEERINGDB_DC:
+        return OriginClass(
+            kind=DATACENTER, confidence="high",
+            rationale=f"PeeringDB AS type '{peeringdb_type}' (content/hosting network)",
+            trust_note="Datacenter/content origin — a cert here carries low identity weight (principle #6).")
 
-    # Provider flags are stronger than name keywords.
+    # 3. Geo hosting flag.
     if geo.connection_type == "hosting":
         return OriginClass(
             kind=DATACENTER, confidence="high",
             rationale="geo provider flags this as hosting/datacenter space",
             trust_note="Datacenter origin — a cert here carries low identity weight (principle #6).")
+
+    # 4. Proxy / VPN flag — anonymizing egress, effectively datacenter.
+    if geo.proxy_vpn:
+        return OriginClass(
+            kind=DATACENTER, confidence="medium",
+            rationale="geo provider flags this as a proxy/VPN/anonymizer",
+            trust_note="Anonymizing/datacenter egress — a cert here carries low identity weight (principle #6).")
+
+    blob = _text(ownership.organization, ownership.network_name, geo.isp, geo.org)
+
+    # 5. Mobile.
     if geo.connection_type == "mobile" or any(k in blob for k in _MOBILE_KEYWORDS):
         return OriginClass(
             kind=MOBILE, confidence="medium",
             rationale="mobile/cellular carrier indicators",
             trust_note="Mobile carrier space — shared CGNAT is common; attribution is weak.")
 
+    # 6. Keyword fallback.
     dc = any(k in blob for k in _DC_KEYWORDS)
     isp = any(k in blob for k in _ISP_KEYWORDS)
-
     if dc and not isp:
         return OriginClass(
             kind=DATACENTER, confidence="medium",
