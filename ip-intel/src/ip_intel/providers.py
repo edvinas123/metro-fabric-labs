@@ -237,3 +237,28 @@ def make_shodan(fetch_json: Callable[..., dict]) -> Optional[Callable[[str], dic
                 "tags": list(d.get("tags") or [])}
 
     return check
+
+
+def make_apivoid(fetch_json: Callable[..., dict]) -> Optional[Callable[[str], dict]]:
+    """APIVoid IP Reputation — aggregate blocklist detections, a risk score, and
+    anonymity flags (proxy / VPN / Tor / hosting) in one call."""
+    key = os.environ.get("APIVOID_KEY")
+    if not key:
+        return None
+
+    def check(ip: str) -> dict:
+        d = fetch_json("https://endpoint.apivoid.com/iprep/v1/pay-as-you-go/",
+                       params={"key": key, "ip": ip})
+        rep = (d.get("data") or {}).get("report") or {}
+        bl = rep.get("blacklists") or {}
+        anon = rep.get("anonymity") or {}
+        flags = [name for name, on in (
+            ("proxy", anon.get("is_proxy")), ("webproxy", anon.get("is_webproxy")),
+            ("vpn", anon.get("is_vpn")), ("tor", anon.get("is_tor")),
+            ("hosting", anon.get("is_hosting"))) if on]
+        risk = (rep.get("risk_score") or {}).get("result")
+        return {"detections": bl.get("detections"),
+                "engines": bl.get("engines_count"),
+                "risk": risk, "flags": flags}
+
+    return check

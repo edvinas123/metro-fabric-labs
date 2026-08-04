@@ -32,8 +32,12 @@ Priority = how much it improves the report per minute of signup effort.
 | 6 | **IP2Location LITE** | second offline geo DB (cross-check) | free download | `IP2LOCATION_DB` (file) | https://lite.ip2location.com/ |
 | 7 | **Scamalytics** | fraud score + risk band | free on request | `SCAMALYTICS_BASE` + `SCAMALYTICS_KEY` | https://scamalytics.com/ |
 | 8 | **IPQualityScore** | fraud score + proxy/VPN (Scamalytics alt) | 5,000/mo | `IPQS_KEY` | https://www.ipqualityscore.com/create-account |
+| 9 | **APIVoid** | blocklist detections + risk score + anonymity flags (proxy/vpn/tor/hosting), one call | trial credits | `APIVOID_KEY` | https://www.apivoid.com/ |
 
 Notes:
+- **APIVoid** is an aggregate reputation source — its anonymity flags also feed the
+  origin verdict (proxy/VPN → datacenter/anon egress). Credit-metered, so best kept
+  for targeted checks rather than large sweeps.
 - **7 and 8 overlap** (both are fraud scores). Pick one to start — IPQS has the
   easier self-serve signup; Scamalytics is stronger but approval-gated. ip-intel
   uses Scamalytics first and falls back to IPQS for the score.

@@ -23,6 +23,20 @@ def test_build_report_end_to_end(fake_fetch_json, fake_dns, tor_get):
     assert r.origin.kind == DATACENTER   # 8.8.8.8 is Google hosting space
 
 
+def test_apivoid_anonymity_feeds_verdict(fake_fetch_json, fake_dns, tor_get):
+    # ip-api fixture has proxy=False; APIVoid flagging proxy should still flip the
+    # geo proxy flag the classifier reads. (8.8.8.8 already reads datacenter via
+    # the hosting flag, so assert the flag propagation on an object level.)
+    from ip_intel import report as R
+    r = R.build_report("8.8.8.8", fetch_json=fake_fetch_json, dns=fake_dns,
+                       tor_get=tor_get,
+                       apivoid=lambda ip: {"detections": 1, "risk": 20,
+                                           "flags": ["vpn"]},
+                       now="2026-08-03T00:00:00Z")
+    assert "vpn" in r.abuse.anonymity_flags
+    assert r.geo.proxy_vpn is True
+
+
 def test_invalid_ip_raises():
     with pytest.raises(ValueError):
         build_report("not-an-ip", fetch_json=lambda u, **k: {}, tor_get=lambda: "")

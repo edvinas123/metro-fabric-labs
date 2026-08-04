@@ -26,6 +26,7 @@ def _provider_kwargs(http: HttpClient) -> dict:
         "ipqs": providers.make_ipqs(http.get_json),
         "greynoise": providers.make_greynoise(http.get_json),
         "shodan": providers.make_shodan(http.get_json),
+        "apivoid": providers.make_apivoid(http.get_json),
         "maxmind": providers.make_maxmind(),
         "ip2location": providers.make_ip2location(),
         "ipinfo": providers.make_ipinfo(http.get_json),

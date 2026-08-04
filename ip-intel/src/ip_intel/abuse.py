@@ -58,6 +58,7 @@ def lookup(
     ipqs: Optional[Callable[[str], dict]] = None,
     greynoise: Optional[Callable[[str], dict]] = None,
     shodan: Optional[Callable[[str], dict]] = None,
+    apivoid: Optional[Callable[[str], dict]] = None,
     abuse_email: Optional[str] = None,
 ) -> Abuse:
     obj = ipaddress.ip_address(ip)
@@ -149,5 +150,16 @@ def lookup(
             out.sources.append("shodan")
         except Exception as e:  # noqa: BLE001
             out.errors.append(f"shodan failed: {e}")
+
+    # Optional APIVoid — aggregate reputation: detections + risk + anonymity.
+    if apivoid is not None:
+        try:
+            data = apivoid(ip) or {}
+            out.blacklist_detections = data.get("detections")
+            out.risk_score = data.get("risk")
+            out.anonymity_flags = data.get("flags") or []
+            out.sources.append("apivoid")
+        except Exception as e:  # noqa: BLE001
+            out.errors.append(f"apivoid failed: {e}")
 
     return out

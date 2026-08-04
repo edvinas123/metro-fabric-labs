@@ -37,6 +37,7 @@ def build_report(
     ipqs: Optional[Callable[[str], dict]] = None,
     greynoise: Optional[Callable[[str], dict]] = None,
     shodan: Optional[Callable[[str], dict]] = None,
+    apivoid: Optional[Callable[[str], dict]] = None,
     maxmind: Optional[Callable[[str], dict]] = None,
     ip2location: Optional[Callable[[str], dict]] = None,
     ipinfo: Optional[Callable[[str], dict]] = None,
@@ -57,7 +58,15 @@ def build_report(
     announcement = ann_mod.lookup(ip, fetch_json)
     abuse = abuse_mod.lookup(ip, dns=dns, tor_get=tor_get, abuseipdb=abuseipdb,
                              scamalytics=scamalytics, ipqs=ipqs, greynoise=greynoise,
-                             shodan=shodan, abuse_email=ownership.abuse_email)
+                             shodan=shodan, apivoid=apivoid,
+                             abuse_email=ownership.abuse_email)
+
+    # APIVoid anonymity (proxy/VPN) is a dedicated signal — a positive detection
+    # sets the geo proxy flag the classifier reads (even if a geo provider said
+    # False), since APIVoid is the more specialized source for this.
+    if not geo.proxy_vpn and any(f in ("proxy", "vpn", "webproxy")
+                                 for f in abuse.anonymity_flags):
+        geo.proxy_vpn = True
 
     # ASN → PeeringDB network type feeds the origin verdict (strongest signal).
     asn = announcement.origin_asn or geo.asn
@@ -121,6 +130,9 @@ def render_markdown(r: IPReport) -> str:
                         else a.fraud_score),
         ("GreyNoise", f"{a.greynoise_class} ({a.greynoise_name})" if a.greynoise_name
                       else a.greynoise_class),
+        ("APIVoid risk", a.risk_score),
+        ("APIVoid detections", a.blacklist_detections),
+        ("Anonymity", ", ".join(a.anonymity_flags) if a.anonymity_flags else None),
         ("Open ports", ", ".join(str(p) for p in a.open_ports) if a.open_ports else None),
         ("Exposure tags", ", ".join(a.exposure_tags) if a.exposure_tags else None),
     ]:

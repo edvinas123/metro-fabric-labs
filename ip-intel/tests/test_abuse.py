@@ -76,3 +76,13 @@ def test_shodan_exposure(fake_dns, tor_get):
     assert a.open_ports == [53, 443]
     assert a.exposure_tags == ["cloud"]
     assert "shodan" in a.sources
+
+
+def test_apivoid_reputation(fake_dns, tor_get):
+    a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get,
+                     apivoid=lambda ip: {"detections": 3, "engines": 90, "risk": 45,
+                                         "flags": ["proxy", "hosting"]})
+    assert a.blacklist_detections == 3
+    assert a.risk_score == 45
+    assert a.anonymity_flags == ["proxy", "hosting"]
+    assert "apivoid" in a.sources

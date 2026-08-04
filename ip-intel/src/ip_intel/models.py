@@ -50,6 +50,9 @@ class Abuse:
     greynoise_name: Optional[str] = None     # actor/tool label from GreyNoise
     open_ports: list[int] = field(default_factory=list)   # Shodan (if key present)
     exposure_tags: list[str] = field(default_factory=list)  # Shodan tags (cloud, vpn, ...)
+    risk_score: Optional[int] = None          # APIVoid risk score 0-100 (if key present)
+    blacklist_detections: Optional[int] = None  # APIVoid: # of blocklists flagging it
+    anonymity_flags: list[str] = field(default_factory=list)  # proxy/vpn/tor/hosting (APIVoid)
     sources: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
