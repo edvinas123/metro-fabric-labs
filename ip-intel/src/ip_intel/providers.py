@@ -14,6 +14,10 @@ Env:
   SCAMALYTICS_BASE  your account base URL, e.g. https://api11.scamalytics.com/<user>
   SCAMALYTICS_KEY   your Scamalytics API key
   ABUSEIPDB_KEY     AbuseIPDB free-tier key
+  IPINFO_TOKEN      ipinfo.io token (geo + ASN + privacy flags)
+  GREYNOISE_KEY     GreyNoise Community API key (scanner classification)
+  SHODAN_KEY        Shodan API key (open ports + tags)
+  IPQS_KEY          IPQualityScore key (fraud score + proxy/VPN)
 """
 
 import os
@@ -152,5 +156,84 @@ def make_scamalytics(fetch_json: Callable[..., dict]) -> Optional[Callable[[str]
         risk = inner.get("scamalytics_risk", inner.get("risk"))
         return {"score": int(score) if score not in (None, "") else None,
                 "risk": risk}
+
+    return check
+
+
+def make_ipqs(fetch_json: Callable[..., dict]) -> Optional[Callable[[str], dict]]:
+    """IPQualityScore — fraud score + proxy/VPN/Tor detection. Alt to Scamalytics."""
+    key = os.environ.get("IPQS_KEY")
+    if not key:
+        return None
+
+    def check(ip: str) -> dict:
+        d = fetch_json(f"https://ipqualityscore.com/api/json/ip/{key}/{ip}")
+        return {"score": d.get("fraud_score"),
+                "proxy": bool(d.get("proxy")) or bool(d.get("vpn")) or bool(d.get("tor"))}
+
+    return check
+
+
+# --- Geo + privacy (IPinfo) ------------------------------------------------
+
+def make_ipinfo(fetch_json: Callable[..., dict]) -> Optional[Callable[[str], dict]]:
+    """ipinfo.io — geo, ASN/org, and (paid tiers) privacy flags. Returns a geo
+    dict augmented with `privacy_flags` and `proxy_vpn`."""
+    token = os.environ.get("IPINFO_TOKEN")
+    if not token:
+        return None
+
+    def lookup(ip: str) -> dict:
+        d = fetch_json(f"https://ipinfo.io/{ip}/json", params={"token": token})
+        loc = (d.get("loc") or "").split(",")
+        lat = float(loc[0]) if len(loc) == 2 and loc[0] else None
+        lon = float(loc[1]) if len(loc) == 2 and loc[1] else None
+        asn = None
+        org = d.get("org") or ""
+        if org.upper().startswith("AS"):
+            head = org.split()[0]
+            if head[2:].isdigit():
+                asn = int(head[2:])
+        priv = d.get("privacy") or {}
+        flags = [k for k in ("vpn", "proxy", "tor", "hosting", "relay") if priv.get(k)]
+        return {
+            "country": d.get("country"), "region": d.get("region"),
+            "city": d.get("city"), "postal": d.get("postal"),
+            "latitude": lat, "longitude": lon, "timezone": d.get("timezone"),
+            "org": org or None, "asn": asn,
+            "privacy_flags": flags,
+            "proxy_vpn": bool(flags) if priv else None,
+        }
+
+    return lookup
+
+
+# --- Reputation / exposure -------------------------------------------------
+
+def make_greynoise(fetch_json: Callable[..., dict]) -> Optional[Callable[[str], dict]]:
+    """GreyNoise Community API — is this IP a known internet scanner, and is it
+    benign or malicious."""
+    key = os.environ.get("GREYNOISE_KEY")
+    if not key:
+        return None
+
+    def check(ip: str) -> dict:
+        d = fetch_json(f"https://api.greynoise.io/v3/community/{ip}",
+                       headers={"key": key, "Accept": "application/json"})
+        return {"classification": d.get("classification"), "name": d.get("name")}
+
+    return check
+
+
+def make_shodan(fetch_json: Callable[..., dict]) -> Optional[Callable[[str], dict]]:
+    """Shodan host lookup — open ports and tags (exposure surface)."""
+    key = os.environ.get("SHODAN_KEY")
+    if not key:
+        return None
+
+    def check(ip: str) -> dict:
+        d = fetch_json(f"https://api.shodan.io/shodan/host/{ip}", params={"key": key})
+        return {"ports": [int(p) for p in (d.get("ports") or [])],
+                "tags": list(d.get("tags") or [])}
 
     return check

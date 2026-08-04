@@ -43,8 +43,12 @@ class Abuse:
     special_use: Optional[str] = None       # e.g. "private", "reserved", "loopback"
     abuse_confidence: Optional[int] = None  # AbuseIPDB score 0-100 (if key present)
     report_categories: list[str] = field(default_factory=list)
-    fraud_score: Optional[int] = None       # Scamalytics 0-100 (if key present)
-    fraud_risk: Optional[str] = None         # Scamalytics risk band (low/medium/high/very high)
+    fraud_score: Optional[int] = None       # Scamalytics/IPQS 0-100 (if key present)
+    fraud_risk: Optional[str] = None         # risk band (low/medium/high/very high)
+    greynoise_class: Optional[str] = None    # benign / malicious / unknown (if key present)
+    greynoise_name: Optional[str] = None     # actor/tool label from GreyNoise
+    open_ports: list[int] = field(default_factory=list)   # Shodan (if key present)
+    exposure_tags: list[str] = field(default_factory=list)  # Shodan tags (cloud, vpn, ...)
     sources: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -64,6 +68,7 @@ class Geo:
     asn: Optional[int] = None
     connection_type: Optional[str] = None   # hosting / mobile / residential when known
     proxy_vpn: Optional[bool] = None        # proxy / VPN / anonymizer flag
+    privacy_flags: list[str] = field(default_factory=list)  # vpn/proxy/tor/hosting/relay (IPinfo)
     by_source: dict[str, str] = field(default_factory=dict)  # provider -> country
     disagreements: list[str] = field(default_factory=list)  # cross-source conflicts
     sources: list[str] = field(default_factory=list)

@@ -57,3 +57,13 @@ def test_registrant_country_crosscheck():
         return {"success": True, "country": "United States"}
     g = geo.lookup("8.8.8.8", fetch, registrant_country="Germany")
     assert any("registrant=Germany" in d for d in g.disagreements)
+
+
+def test_ipinfo_privacy_flags(fake_fetch_json):
+    def ipinfo(ip):
+        return {"country": "United States", "asn": 15169,
+                "privacy_flags": ["vpn", "hosting"], "proxy_vpn": True}
+    g = geo.lookup("8.8.8.8", fake_fetch_json, ipinfo=ipinfo)
+    assert g.privacy_flags == ["vpn", "hosting"]
+    assert g.proxy_vpn is True
+    assert "ipinfo" in g.sources

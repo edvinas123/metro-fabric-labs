@@ -34,8 +34,12 @@ def build_report(
     tor_get: Optional[Callable[[], str]] = None,
     abuseipdb: Optional[Callable[[str], dict]] = None,
     scamalytics: Optional[Callable[[str], dict]] = None,
+    ipqs: Optional[Callable[[str], dict]] = None,
+    greynoise: Optional[Callable[[str], dict]] = None,
+    shodan: Optional[Callable[[str], dict]] = None,
     maxmind: Optional[Callable[[str], dict]] = None,
     ip2location: Optional[Callable[[str], dict]] = None,
+    ipinfo: Optional[Callable[[str], dict]] = None,
     peeringdb: Optional[Callable[[int], Optional[str]]] = None,
     now: Optional[str] = None,
 ) -> IPReport:
@@ -49,10 +53,11 @@ def build_report(
 
     ownership = own_mod.lookup(ip, fetch_json)
     geo = geo_mod.lookup(ip, fetch_json, maxmind=maxmind, ip2location=ip2location,
-                         registrant_country=ownership.country)
+                         ipinfo=ipinfo, registrant_country=ownership.country)
     announcement = ann_mod.lookup(ip, fetch_json)
     abuse = abuse_mod.lookup(ip, dns=dns, tor_get=tor_get, abuseipdb=abuseipdb,
-                             scamalytics=scamalytics, abuse_email=ownership.abuse_email)
+                             scamalytics=scamalytics, ipqs=ipqs, greynoise=greynoise,
+                             shodan=shodan, abuse_email=ownership.abuse_email)
 
     # ASN → PeeringDB network type feeds the origin verdict (strongest signal).
     asn = announcement.origin_asn or geo.asn
@@ -110,8 +115,12 @@ def render_markdown(r: IPReport) -> str:
         ("Tor exit node", a.tor_exit_node), ("Bogon / special-use", a.special_use or "no"),
         ("Abuse confidence", a.abuse_confidence),
         ("Reports", ", ".join(a.report_categories)),
-        ("Scamalytics fraud", f"{a.fraud_score} ({a.fraud_risk})"
-                              if a.fraud_score is not None else None),
+        ("Fraud score", f"{a.fraud_score} ({a.fraud_risk})" if a.fraud_risk
+                        else a.fraud_score),
+        ("GreyNoise", f"{a.greynoise_class} ({a.greynoise_name})" if a.greynoise_name
+                      else a.greynoise_class),
+        ("Open ports", ", ".join(str(p) for p in a.open_ports) if a.open_ports else None),
+        ("Exposure tags", ", ".join(a.exposure_tags) if a.exposure_tags else None),
     ]:
         L.append(f"| {label} | {_v(val)} |")
     L.append(f"\n*sources: {_v(', '.join(a.sources))}*")
@@ -129,6 +138,7 @@ def render_markdown(r: IPReport) -> str:
         ("ASN", f"AS{g.asn}" if g.asn else None),
         ("Connection", g.connection_type),
         ("Proxy / VPN", g.proxy_vpn),
+        ("Privacy flags", ", ".join(g.privacy_flags) if g.privacy_flags else None),
         ("Country by source", ", ".join(f"{s}={c}" for s, c in g.by_source.items())
                               if g.by_source else None),
     ]:

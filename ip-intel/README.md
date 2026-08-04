@@ -65,19 +65,25 @@ Network name, allocated **CIDR**, organization, responsible **RIR** (ARIN / RIPE
 **Source:** `rdap.org` bootstrap → authoritative RIR.
 
 ### 2. Abuse & reputation *(zero-key)*
-Abuse contact email, **reverse DNS** + forward-confirmed check, **DNSBL** membership (Spamhaus ZEN, SpamCop, Barracuda — queried directly over DNS), **Tor exit-node** membership, and bogon / special-use flags. Optionally an **AbuseIPDB** confidence score if a free key is present (`ABUSEIPDB_KEY`).
-**Sources:** DNS, public blocklist zones, Tor bulk exit list, `ipaddress`, AbuseIPDB (optional).
+Abuse contact email, **reverse DNS** + forward-confirmed check, **DNSBL** membership (Spamhaus ZEN, SpamCop, Barracuda — queried directly over DNS), **Tor exit-node** membership, and bogon / special-use flags.
+**Sources:** DNS, public blocklist zones, Tor bulk exit list, `ipaddress`.
+**+ enrichment (key-gated):** AbuseIPDB confidence score, Scamalytics / IPQualityScore fraud score, GreyNoise scanner classification, Shodan open ports + exposure tags.
 
 ### 3. Geolocation *(multi-source)*
-Country, region, city, lat/lon, timezone, ISP/org, and connection type (hosting / mobile). Two providers are queried and any **country-level disagreement is surfaced**, not hidden. Geo is where the IP *resolves* — it can legitimately differ from the registrant country in §1.
+Country, region, city, postal, lat/lon, timezone, ISP/org, ASN, and connection type (hosting / mobile), with **proxy/VPN** detection. Every provider's country goes into `by_source` and any **disagreement is surfaced** — including against the WHOIS registrant country. Geo is where the IP *resolves* — it can legitimately differ from the registrant country in §1.
 **Sources:** `ip-api.com`, `ipwho.is`.
+**+ enrichment:** MaxMind GeoLite2 + IP2Location LITE (offline DBs), IPinfo (geo + ASN + privacy flags).
 
 ### 4. Announcement — BGP *(zero-key)*
-Whether a covering prefix is **announced**, the prefix, **origin ASN** + AS holder name, **RPKI** validation state, and route **visibility** (collector peers seeing it).
-**Source:** RIPEstat Data API.
+Whether a covering prefix is **announced**, the prefix, **origin ASN** + AS holder name, **RPKI** validation state, route **visibility** (collector peers seeing it), plus **upstream ASNs** and **more-specific prefixes**.
+**Sources:** RIPEstat Data API, BGPView (fills AS name / upstreams / more-specifics, and recovers the origin ASN when the RIS view is empty).
 
 ### Origin verdict — the Metro Fabric value-add
-A single heuristic classification — `isp_org` / `datacenter` / `mobile` / `reserved` / `unknown` — with a rationale and what it means for a Certificate of Origin. Clearly labelled a **heuristic** (keyword + provider-flag based): a signal to *weight* a cert, never a substitute for a confirmed ISP-ORG range.
+A single classification — `isp_org` / `datacenter` / `mobile` / `reserved` / `unknown` — with a rationale and what it means for a Certificate of Origin. Strongest signal first: **PeeringDB AS network type**, then geo hosting/proxy flags, then a hosting-brand/ISP keyword fallback. Clearly labelled a **heuristic**: a signal to *weight* a cert, never a substitute for a confirmed ISP-ORG range.
+
+## Optional enrichment / API keys
+
+The whole report runs with **zero keys**. Optional providers turn on automatically when their key or DB is present — see [`API_KEYS.md`](API_KEYS.md) for the full sign-up list (all have free tiers) and [`.env.example`](.env.example) for the variables.
 
 ---
 
@@ -101,6 +107,7 @@ ip-intel/
 │   ├── geo.py           # multi-provider geo + reconciliation
 │   ├── announcement.py  # RIPEstat BGP/RPKI chain
 │   ├── classify.py      # origin verdict (principle #6)
+│   ├── providers.py     # key/DB-gated enrichment factories (off unless configured)
 │   ├── report.py        # assemble + render (md/json/html)
 │   ├── whoami.py        # thin identity projection (whoami-agent seed)
 │   └── cli.py           # `ipintel`

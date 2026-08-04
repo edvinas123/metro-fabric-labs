@@ -46,3 +46,33 @@ def test_scamalytics_enrichment(fake_dns, tor_get):
     assert a.fraud_score == 63
     assert a.fraud_risk == "high"
     assert "scamalytics" in a.sources
+
+
+def test_ipqs_fills_fraud_when_scamalytics_absent(fake_dns, tor_get):
+    a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get,
+                     ipqs=lambda ip: {"score": 88, "proxy": True})
+    assert a.fraud_score == 88
+    assert "ipqs" in a.sources
+
+
+def test_scamalytics_wins_over_ipqs(fake_dns, tor_get):
+    a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get,
+                     scamalytics=lambda ip: {"score": 10, "risk": "low"},
+                     ipqs=lambda ip: {"score": 88})
+    assert a.fraud_score == 10        # scamalytics ran first; ipqs doesn't overwrite
+
+
+def test_greynoise_enrichment(fake_dns, tor_get):
+    a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get,
+                     greynoise=lambda ip: {"classification": "benign", "name": "Google"})
+    assert a.greynoise_class == "benign"
+    assert a.greynoise_name == "Google"
+    assert "greynoise" in a.sources
+
+
+def test_shodan_exposure(fake_dns, tor_get):
+    a = abuse.lookup("8.8.8.8", dns=fake_dns, tor_get=tor_get,
+                     shodan=lambda ip: {"ports": [53, 443], "tags": ["cloud"]})
+    assert a.open_ports == [53, 443]
+    assert a.exposure_tags == ["cloud"]
+    assert "shodan" in a.sources

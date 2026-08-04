@@ -9,6 +9,10 @@ def test_parses_bgp_chain(fake_fetch_json):
     assert a.as_name == "GOOGLE, US"
     assert a.rpki_status == "valid"
     assert a.visibility == 300
+    # BGPView enriches upstreams + more-specifics that RIPEstat doesn't return.
+    assert a.upstreams == [3356, 174]
+    assert "8.8.8.0/25" in a.more_specifics
+    assert "bgpview" in a.sources
     assert a.errors == []
 
 

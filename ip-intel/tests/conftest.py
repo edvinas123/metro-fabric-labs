@@ -22,6 +22,8 @@ _ROUTES = {
     "as-overview": "ripe_as_overview.json",
     "routing-status": "ripe_routing_status.json",
     "rpki-validation": "ripe_rpki.json",
+    "bgpview.io/asn": "bgpview_upstreams.json",
+    "bgpview.io/ip": "bgpview_ip.json",
 }
 
 

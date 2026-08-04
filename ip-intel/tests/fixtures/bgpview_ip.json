@@ -1,0 +1,4 @@
+{"data": {"prefixes": [
+  {"prefix": "8.8.8.0/24", "asn": {"asn": 15169, "name": "GOOGLE", "description": "Google LLC"}},
+  {"prefix": "8.8.8.0/25", "asn": {"asn": 15169, "name": "GOOGLE"}}
+]}}

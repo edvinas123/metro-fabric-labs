@@ -95,6 +95,7 @@ def lookup(
     *,
     maxmind: Optional[Callable[[str], dict]] = None,
     ip2location: Optional[Callable[[str], dict]] = None,
+    ipinfo: Optional[Callable[[str], dict]] = None,
     registrant_country: Optional[str] = None,
 ) -> Geo:
     try:
@@ -130,6 +131,21 @@ def lookup(
             _merge(geo, ip2location(ip), "ip2location")
         except Exception as e:  # noqa: BLE001
             geo.errors.append(f"ip2location failed: {e}")
+
+    # IPinfo — geo + ASN + privacy flags (key-gated).
+    if ipinfo is not None:
+        try:
+            data = ipinfo(ip)
+            _merge(geo, data, "ipinfo")
+            for f in data.get("privacy_flags") or []:
+                if f not in geo.privacy_flags:
+                    geo.privacy_flags.append(f)
+            if geo.proxy_vpn is None and data.get("proxy_vpn") is not None:
+                geo.proxy_vpn = data["proxy_vpn"]
+            elif data.get("proxy_vpn"):
+                geo.proxy_vpn = True
+        except Exception as e:  # noqa: BLE001
+            geo.errors.append(f"ipinfo failed: {e}")
 
     _reconcile(geo, registrant_country)
     return geo

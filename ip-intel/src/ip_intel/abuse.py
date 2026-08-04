@@ -55,6 +55,9 @@ def lookup(
     tor_get: Optional[Callable[[], str]] = None,
     abuseipdb: Optional[Callable[[str], dict]] = None,
     scamalytics: Optional[Callable[[str], dict]] = None,
+    ipqs: Optional[Callable[[str], dict]] = None,
+    greynoise: Optional[Callable[[str], dict]] = None,
+    shodan: Optional[Callable[[str], dict]] = None,
     abuse_email: Optional[str] = None,
 ) -> Abuse:
     obj = ipaddress.ip_address(ip)
@@ -115,5 +118,35 @@ def lookup(
             out.sources.append("scamalytics")
         except Exception as e:  # noqa: BLE001
             out.errors.append(f"scamalytics failed: {e}")
+
+    # Optional IPQualityScore — fills the fraud score if Scamalytics didn't.
+    if ipqs is not None:
+        try:
+            data = ipqs(ip) or {}
+            if out.fraud_score is None:
+                out.fraud_score = data.get("score")
+            out.sources.append("ipqs")
+        except Exception as e:  # noqa: BLE001
+            out.errors.append(f"ipqs failed: {e}")
+
+    # Optional GreyNoise — internet-scanner classification.
+    if greynoise is not None:
+        try:
+            data = greynoise(ip) or {}
+            out.greynoise_class = data.get("classification")
+            out.greynoise_name = data.get("name")
+            out.sources.append("greynoise")
+        except Exception as e:  # noqa: BLE001
+            out.errors.append(f"greynoise failed: {e}")
+
+    # Optional Shodan — open ports + exposure tags.
+    if shodan is not None:
+        try:
+            data = shodan(ip) or {}
+            out.open_ports = data.get("ports") or []
+            out.exposure_tags = data.get("tags") or []
+            out.sources.append("shodan")
+        except Exception as e:  # noqa: BLE001
+            out.errors.append(f"shodan failed: {e}")
 
     return out

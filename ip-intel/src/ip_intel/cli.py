@@ -23,8 +23,12 @@ def _provider_kwargs(http: HttpClient) -> dict:
         "tor_get": lambda: http.get_text(TOR_EXIT_LIST),
         "abuseipdb": providers.make_abuseipdb(http.get_json),
         "scamalytics": providers.make_scamalytics(http.get_json),
+        "ipqs": providers.make_ipqs(http.get_json),
+        "greynoise": providers.make_greynoise(http.get_json),
+        "shodan": providers.make_shodan(http.get_json),
         "maxmind": providers.make_maxmind(),
         "ip2location": providers.make_ip2location(),
+        "ipinfo": providers.make_ipinfo(http.get_json),
         "peeringdb": providers.make_peeringdb(http.get_json),
     }
 
