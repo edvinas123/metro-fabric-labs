@@ -8,10 +8,11 @@ ISP-ORG range carries real identity weight; a datacenter-IP cert does not.*
 Signal precedence (strongest first):
   1. bogon / special-use        → reserved
   2. PeeringDB AS network type  → authoritative-ish: ISP vs Content/hosting
-  3. geo provider `hosting` flag → datacenter
-  4. geo proxy/VPN flag         → datacenter/anon egress
-  5. mobile indicators          → mobile
-  6. ownership/geo name keywords → last-resort fallback
+  3. AbuseIPDB usage type       → Data Center / Fixed Line ISP / Mobile ISP
+  4. geo provider `hosting` flag → datacenter
+  5. geo proxy/VPN flag         → datacenter/anon egress
+  6. mobile indicators          → mobile
+  7. ownership/geo name keywords → last-resort fallback
 
 It remains a **heuristic** — a signal to weight a Certificate of Origin, never a
 substitute for a confirmed ISP-ORG range.
@@ -48,8 +49,15 @@ def _text(*parts: str | None) -> str:
     return " ".join(p.lower() for p in parts if p)
 
 
+# AbuseIPDB `usageType` → our origin class.
+_USAGE_DC = {"Data Center/Web Hosting/Transit", "Content Delivery Network"}
+_USAGE_ISP = {"Fixed Line ISP"}
+_USAGE_MOBILE = {"Mobile ISP"}
+
+
 def classify(ownership: Ownership, geo: Geo, abuse: Abuse, *,
-             peeringdb_type: Optional[str] = None) -> OriginClass:
+             peeringdb_type: Optional[str] = None,
+             usage_type: Optional[str] = None) -> OriginClass:
     if abuse.is_bogon:
         return OriginClass(
             kind=RESERVED, confidence="high",
@@ -68,7 +76,24 @@ def classify(ownership: Ownership, geo: Geo, abuse: Abuse, *,
             rationale=f"PeeringDB AS type '{peeringdb_type}' (content/hosting network)",
             trust_note="Datacenter/content origin — a cert here carries low identity weight (principle #6).")
 
-    # 3. Geo hosting flag.
+    # 3. AbuseIPDB usage type — an authoritative operator-declared category.
+    if usage_type in _USAGE_DC:
+        return OriginClass(
+            kind=DATACENTER, confidence="high",
+            rationale=f"AbuseIPDB usage type '{usage_type}'",
+            trust_note="Datacenter/hosting origin — a cert here carries low identity weight (principle #6).")
+    if usage_type in _USAGE_ISP:
+        return OriginClass(
+            kind=ISP_ORG, confidence="high",
+            rationale=f"AbuseIPDB usage type '{usage_type}'",
+            trust_note="Clean ISP-ORG origin — the trust anchor; a cert here carries real weight (principle #6).")
+    if usage_type in _USAGE_MOBILE:
+        return OriginClass(
+            kind=MOBILE, confidence="high",
+            rationale=f"AbuseIPDB usage type '{usage_type}'",
+            trust_note="Mobile carrier space — shared CGNAT is common; attribution is weak.")
+
+    # 4. Geo hosting flag.
     if geo.connection_type == "hosting":
         return OriginClass(
             kind=DATACENTER, confidence="high",

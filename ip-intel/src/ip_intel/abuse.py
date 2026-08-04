@@ -102,6 +102,7 @@ def lookup(
         try:
             data = abuseipdb(ip) or {}
             out.abuse_confidence = data.get("abuseConfidenceScore")
+            out.usage_type = data.get("usageType")
             total = data.get("totalReports")
             if total is not None:
                 out.report_categories.append(f"{total} reports (AbuseIPDB)")

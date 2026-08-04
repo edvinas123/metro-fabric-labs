@@ -62,7 +62,8 @@ def build_report(
     # ASN → PeeringDB network type feeds the origin verdict (strongest signal).
     asn = announcement.origin_asn or geo.asn
     peeringdb_type = peeringdb(asn) if (peeringdb and asn) else None
-    origin = classify(ownership, geo, abuse, peeringdb_type=peeringdb_type)
+    origin = classify(ownership, geo, abuse, peeringdb_type=peeringdb_type,
+                      usage_type=abuse.usage_type)
 
     return IPReport(
         ip=ip, generated_at=now or _now_iso(),
@@ -114,6 +115,7 @@ def render_markdown(r: IPReport) -> str:
         ("Blocklists checked", ", ".join(a.blocklists_checked)),
         ("Tor exit node", a.tor_exit_node), ("Bogon / special-use", a.special_use or "no"),
         ("Abuse confidence", a.abuse_confidence),
+        ("Usage type", a.usage_type),
         ("Reports", ", ".join(a.report_categories)),
         ("Fraud score", f"{a.fraud_score} ({a.fraud_risk})" if a.fraud_risk
                         else a.fraud_score),

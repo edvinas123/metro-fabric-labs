@@ -58,6 +58,27 @@ def test_peeringdb_content_type_is_datacenter():
     assert oc.confidence == "high"
 
 
+def test_usage_type_datacenter_wins():
+    # AbuseIPDB usageType is authoritative — the PEG TECH / 108.186 case.
+    oc = classify(Ownership(organization="PEG TECH INC"), Geo(), Abuse(),
+                  usage_type="Data Center/Web Hosting/Transit")
+    assert oc.kind == DATACENTER
+    assert oc.confidence == "high"
+    assert "usage type" in oc.rationale
+
+
+def test_usage_type_fixed_line_isp():
+    oc = classify(Ownership(organization="Some Telco"), Geo(), Abuse(),
+                  usage_type="Fixed Line ISP")
+    assert oc.kind == ISP_ORG
+    assert oc.confidence == "high"
+
+
+def test_usage_type_mobile_isp():
+    oc = classify(Ownership(), Geo(), Abuse(), usage_type="Mobile ISP")
+    assert oc.kind == MOBILE
+
+
 def test_proxy_flag_is_datacenter():
     # No PeeringDB type, no hosting flag, but proxy=True (the 108.186.55.1 case).
     oc = classify(Ownership(organization="PEG TECH INC"),

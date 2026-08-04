@@ -42,6 +42,7 @@ class Abuse:
     is_bogon: bool = False
     special_use: Optional[str] = None       # e.g. "private", "reserved", "loopback"
     abuse_confidence: Optional[int] = None  # AbuseIPDB score 0-100 (if key present)
+    usage_type: Optional[str] = None        # AbuseIPDB usage type (Data Center / ISP / ...)
     report_categories: list[str] = field(default_factory=list)
     fraud_score: Optional[int] = None       # Scamalytics/IPQS 0-100 (if key present)
     fraud_risk: Optional[str] = None         # risk band (low/medium/high/very high)
