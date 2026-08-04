@@ -17,11 +17,45 @@ from typing import Callable, Optional
 from .models import Geo
 
 IPAPI_URL = "http://ip-api.com/json/{ip}"
-IPAPI_FIELDS = ("status,message,country,regionName,city,zip,lat,lon,timezone,"
-                "isp,org,as,asname,mobile,proxy,hosting,query")
+IPAPI_FIELDS = ("status,message,country,countryCode,regionName,city,zip,lat,lon,"
+                "timezone,isp,org,as,asname,mobile,proxy,hosting,query")
 IPWHOIS_URL = "https://ipwho.is/{ip}"
 
 _AS_RE = re.compile(r"AS(\d+)", re.I)
+
+# Common country name → ISO-3166 alpha-2. Providers mix full names (ip-api,
+# geo DBs) with codes (ipinfo, RDAP); we compare on the code to avoid false
+# "disagreements" like "United Arab Emirates" vs "AE". Unmapped names fall back
+# to their upper-cased selves, so two providers using the same name still match.
+_NAME_TO_ISO = {
+    "united states": "US", "united states of america": "US", "usa": "US",
+    "united kingdom": "GB", "great britain": "GB", "canada": "CA",
+    "germany": "DE", "france": "FR", "spain": "ES", "italy": "IT",
+    "netherlands": "NL", "belgium": "BE", "switzerland": "CH", "austria": "AT",
+    "ireland": "IE", "portugal": "PT", "sweden": "SE", "norway": "NO",
+    "denmark": "DK", "finland": "FI", "poland": "PL", "czechia": "CZ",
+    "czech republic": "CZ", "romania": "RO", "hungary": "HU", "greece": "GR",
+    "russia": "RU", "russian federation": "RU", "ukraine": "UA", "turkey": "TR",
+    "türkiye": "TR", "united arab emirates": "AE", "saudi arabia": "SA",
+    "israel": "IL", "india": "IN", "china": "CN", "japan": "JP",
+    "south korea": "KR", "korea, republic of": "KR", "singapore": "SG",
+    "hong kong": "HK", "taiwan": "TW", "australia": "AU", "new zealand": "NZ",
+    "brazil": "BR", "argentina": "AR", "mexico": "MX", "chile": "CL",
+    "colombia": "CO", "south africa": "ZA", "nigeria": "NG", "egypt": "EG",
+    "indonesia": "ID", "malaysia": "MY", "thailand": "TH", "vietnam": "VN",
+    "viet nam": "VN", "philippines": "PH", "pakistan": "PK", "bangladesh": "BD",
+    "iran": "IR", "iran, islamic republic of": "IR",
+}
+
+
+def _norm_country(value: Optional[str]) -> Optional[str]:
+    """Canonicalize a country name-or-code to ISO alpha-2 for comparison."""
+    if not value:
+        return None
+    v = value.strip()
+    if len(v) == 2:
+        return v.upper()
+    return _NAME_TO_ISO.get(v.lower(), v.upper())
 
 
 def _parse_asn(*values: Optional[str]) -> Optional[int]:
@@ -61,16 +95,19 @@ def parse_ipapi(data: dict) -> Geo:
         proxy_vpn=bool(data.get("proxy")) if data.get("proxy") is not None else None,
         sources=["ip-api"],
     )
-    if g.country:
-        g.by_source["ip-api"] = g.country
+    # Record the ISO code for comparison (falls back to the name if ip-api didn't
+    # return a code), while `country` keeps the human-readable name for display.
+    code = data.get("countryCode") or g.country
+    if code:
+        g.by_source["ip-api"] = code
     return g
 
 
 def _merge(geo: Geo, other: dict, source: str) -> None:
     """Add a provider's result: record its country, fill any gaps, flag conflicts."""
-    country = other.get("country")
-    if country:
-        geo.by_source[source] = country
+    code = other.get("country_code") or other.get("country")
+    if code:
+        geo.by_source[source] = code
     geo.sources.append(source)
     # Fill missing scalar fields from this provider.
     for attr in ("country", "region", "city", "postal", "latitude", "longitude",
@@ -81,10 +118,13 @@ def _merge(geo: Geo, other: dict, source: str) -> None:
 
 def _reconcile(geo: Geo, registrant_country: Optional[str]) -> None:
     countries = {src: c for src, c in geo.by_source.items() if c}
-    if len(set(countries.values())) > 1:
+    geo_codes = {_norm_country(c) for c in countries.values()}
+    # Compare on normalized ISO codes so "United States" == "US" == "us".
+    if len(geo_codes) > 1:
         geo.disagreements.append(
             "geo country: " + ", ".join(f"{s}={c}" for s, c in countries.items()))
-    if registrant_country and geo.country and registrant_country != geo.country:
+    rc = _norm_country(registrant_country)
+    if rc and geo_codes and rc not in geo_codes:
         geo.disagreements.append(
             f"geo={geo.country} vs WHOIS registrant={registrant_country}")
 
@@ -110,7 +150,9 @@ def lookup(
         if second.get("success", True):
             conn = second.get("connection") or {}
             _merge(geo, {
-                "country": second.get("country"), "region": second.get("region"),
+                "country": second.get("country"),
+                "country_code": second.get("country_code"),
+                "region": second.get("region"),
                 "city": second.get("city"), "postal": second.get("postal"),
                 "isp": conn.get("isp") or conn.get("org"),
                 "asn": conn.get("asn"),

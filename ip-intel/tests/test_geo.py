@@ -59,6 +59,29 @@ def test_registrant_country_crosscheck():
     assert any("registrant=Germany" in d for d in g.disagreements)
 
 
+def test_name_vs_code_is_not_a_disagreement():
+    # ip-api returns a full name, ipwho.is + RDAP return the ISO code — same
+    # country. This must NOT be flagged (the 194.110.242 / AE false-positive).
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United Arab Emirates",
+                    "countryCode": "AE"}
+        return {"success": True, "country": "United Arab Emirates",
+                "country_code": "AE"}
+    g = geo.lookup("1.2.3.4", fetch, registrant_country="AE")
+    assert g.disagreements == []
+
+
+def test_real_disagreement_still_flagged():
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United States",
+                    "countryCode": "US"}
+        return {"success": True, "country": "Canada", "country_code": "CA"}
+    g = geo.lookup("1.2.3.4", fetch)
+    assert any("US" in d and "CA" in d for d in g.disagreements)
+
+
 def test_ipinfo_privacy_flags(fake_fetch_json):
     def ipinfo(ip):
         return {"country": "United States", "asn": 15169,
