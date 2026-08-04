@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from ip_intel.report import build_report, render_markdown, render_json, render_html
+from ip_intel.report import (build_report, render_markdown, render_json,
+                             render_html, render_dashboard)
 from ip_intel.whoami import whoami
 from ip_intel.models import DATACENTER
 
@@ -45,6 +46,17 @@ def test_html_render(fake_fetch_json, fake_dns, tor_get):
     doc = render_html(_report(fake_fetch_json, fake_dns, tor_get))
     assert doc.startswith("<!doctype html>")
     assert "8.8.8.8" in doc
+
+
+def test_dashboard_render(fake_fetch_json, fake_dns, tor_get):
+    r = _report(fake_fetch_json, fake_dns, tor_get)
+    doc = render_dashboard([r, r])
+    assert doc.startswith("<!doctype html>")
+    assert "Per-host findings" in doc
+    assert "8.8.8.8" in doc
+    assert 'pill datacenter' in doc          # verdict pill class
+    # Two reports sharing one CIDR → shared-facts panel appears.
+    assert "Shared facts" in doc
 
 
 def test_whoami_projection(fake_fetch_json, fake_dns, tor_get):

@@ -194,6 +194,86 @@ def render_html(r: IPReport) -> str:
     )
 
 
+_DASHBOARD_CSS = """
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1a2233;--muted:#5b6472;--line:#e3e7ee;--bad:#c62828;--ok:#2e7d32;--dc:#b26a00;--dcbg:#fff3e0}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1420;--card:#161d2b;--ink:#e6ebf2;--muted:#9aa5b5;--line:#263040;--bad:#ff6b6b;--ok:#6bd08a;--dc:#ffb74d;--dcbg:#3a2a12}}
+:root[data-theme=dark]{--bg:#0e1420;--card:#161d2b;--ink:#e6ebf2;--muted:#9aa5b5;--line:#263040;--bad:#ff6b6b;--ok:#6bd08a;--dc:#ffb74d;--dcbg:#3a2a12}
+:root[data-theme=light]{--bg:#f7f8fa;--card:#fff;--ink:#1a2233;--muted:#5b6472;--line:#e3e7ee;--bad:#c62828;--ok:#2e7d32;--dc:#b26a00;--dcbg:#fff3e0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:2rem 1.2rem 3rem}h1{font-size:1.5rem;margin:0 0 .2rem}
+.sub{color:var(--muted);margin:0 0 1.5rem;font-size:.9rem}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin-bottom:1.5rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.9rem 1rem}
+.card .k{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.25rem}
+.card .v{font-weight:600;word-break:break-word}h2{font-size:1.05rem;margin:1.6rem 0 .6rem}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:720px;background:var(--card)}
+th,td{text-align:left;padding:.55rem .8rem;border-bottom:1px solid var(--line);font-size:.88rem;white-space:nowrap}
+th{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:none}
+.num{text-align:right;font-variant-numeric:tabular-nums}.bad{color:var(--bad);font-weight:600}.ok{color:var(--ok)}
+.pill{display:inline-block;padding:.1rem .5rem;border-radius:999px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+.pill.datacenter{background:var(--dcbg);color:var(--dc)}.pill.isp_org{background:#e6f4ea;color:var(--ok)}
+.pill.mobile{background:#e3f2fd;color:#1565c0}.pill.reserved,.pill.unknown{background:var(--line);color:var(--muted)}
+.foot{color:var(--muted);font-size:.78rem;margin-top:2rem;border-top:1px solid var(--line);padding-top:1rem}
+"""
+
+
+def render_dashboard(reports: list[IPReport], title: Optional[str] = None) -> str:
+    """One self-contained HTML page comparing many IPs side by side. Shows a
+    shared-facts panel when every target sits in the same allocation, then a
+    per-host table of the fields that vary (verdict, proxy, blocklists, ports)."""
+    def e(x) -> str:
+        return _html.escape(str(x)) if x not in (None, "", []) else "—"
+
+    reports = list(reports)
+    cidrs = {r.ownership.cidr for r in reports if r.ownership.cidr}
+    owners = {r.ownership.organization for r in reports if r.ownership.organization}
+    shared = ""
+    if len(reports) > 1 and len(cidrs) == 1 and len(owners) <= 1:
+        o0, n0 = reports[0].ownership, reports[0].announcement
+        shared = f"""<h2>Shared facts <small style="color:var(--muted);font-weight:400">(common to all targets)</small></h2>
+<div class="grid">
+  <div class="card"><div class="k">Owner</div><div class="v">{e(o0.organization)}</div></div>
+  <div class="card"><div class="k">Allocation</div><div class="v mono">{e(o0.cidr)} · {e(o0.rir)}</div></div>
+  <div class="card"><div class="k">Abuse contact</div><div class="v">{e(o0.abuse_email)}</div></div>
+  <div class="card"><div class="k">BGP announced</div><div class="v">{'<span class="bad">No — dark / unrouted</span>' if n0.announced is False else e(n0.announced)}</div></div>
+</div>"""
+
+    rows = ""
+    for r in reports:
+        a, g, oc = r.abuse, r.geo, r.origin
+        bl = ", ".join(a.blocklists_listed)
+        bl_cell = f'<span class="bad">{e(bl)}</span>' if bl else '<span class="ok">clean</span>'
+        proxy = '<span class="bad">yes</span>' if g.proxy_vpn else e(g.proxy_vpn)
+        ports = ", ".join(str(p) for p in a.open_ports) if a.open_ports else "—"
+        rows += (f'<tr><td class="mono">{e(r.ip)}</td>'
+                 f'<td><span class="pill {oc.kind}">{e(oc.kind)}</span> <small>{e(oc.confidence)}</small></td>'
+                 f'<td>{e(r.ownership.organization)}</td>'
+                 f'<td>{e(g.country)}</td><td>{proxy}</td><td>{bl_cell}</td>'
+                 f'<td class="num">{e(a.abuse_confidence)}</td>'
+                 f'<td class="num">{e(a.fraud_score)}</td><td>{ports}</td></tr>\n')
+
+    title = title or (f"{sorted(cidrs)[0]}" if len(cidrs) == 1 and len(reports) > 1
+                      else f"{len(reports)} IP(s)")
+    gen = reports[0].generated_at if reports else ""
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ip-intel — {_html.escape(title)}</title><style>{_DASHBOARD_CSS}</style></head>
+<body><div class="wrap">
+<h1>IP Intel Report — <span class="mono">{_html.escape(title)}</span></h1>
+<p class="sub">Generated {e(gen)} · {len(reports)} host(s) · ip-intel (Metro Fabric Labs) · read-only OSINT, blank = undetermined</p>
+{shared}
+<h2>Per-host findings</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>IP</th><th>Verdict</th><th>Owner</th><th>Country</th><th>Proxy/VPN</th><th>Blocklists</th><th>Abuse</th><th>Fraud</th><th>Open ports</th></tr></thead>
+<tbody>
+{rows}</tbody></table></div>
+<p class="foot">Sources: RDAP · AbuseIPDB · Scamalytics/IPQS · Shodan · IPinfo · ip-api · ipwho.is · RIPEstat · BGPView · DNSBL · Tor exit list. Geolocation and origin class are approximate. For legitimate network, security, and research use.</p>
+</div>
+<script>try{{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);}}catch(e){{}}</script>
+</body></html>"""
+
+
 RENDERERS: dict[str, Callable[[IPReport], str]] = {
     "md": render_markdown,
     "json": render_json,

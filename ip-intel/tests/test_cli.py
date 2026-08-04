@@ -36,6 +36,17 @@ def test_writes_all_formats(monkeypatch, tmp_path):
         assert (tmp_path / f"8.8.8.8.report.{ext}").exists()
 
 
+def test_dashboard_flag_writes_one_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "HttpClient", DummyHttp)
+    monkeypatch.setattr(cli, "build_report", _fixed_report)
+    out = tmp_path / "dash.html"
+    rc = cli.main(["report", "8.8.8.8", "1.1.1.1", "--dashboard", str(out)])
+    assert rc == 0
+    assert out.exists()
+    html = out.read_text()
+    assert "Per-host findings" in html and "8.8.8.8" in html and "1.1.1.1" in html
+
+
 def test_unknown_format_errors(monkeypatch):
     monkeypatch.setattr(cli, "HttpClient", DummyHttp)
     assert cli.main(["report", "8.8.8.8", "--format", "xml"]) == 2

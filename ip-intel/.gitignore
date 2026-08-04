@@ -8,3 +8,6 @@ reports/
 *.report.json
 *.report.html
 .env
+
+# local geo DB downloads
+data/

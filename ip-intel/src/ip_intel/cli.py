@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import providers
 from .net import HttpClient
-from .report import EXT, RENDERERS, build_report
+from .report import EXT, RENDERERS, build_report, render_dashboard
 from .whoami import whoami
 
 TOR_EXIT_LIST = "https://check.torproject.org/torbulkexitlist"
@@ -78,6 +78,7 @@ def cmd_report(args) -> int:
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
 
+    built = []
     for token in tokens:
         try:
             ip, note = _resolve_target(token)
@@ -92,15 +93,21 @@ def cmd_report(args) -> int:
         except ValueError as e:
             print(f"skipping {token!r}: {e}", file=sys.stderr)
             continue
+        built.append(report)
 
         if out_dir:
             for f in formats:
                 path = out_dir / f"{ip}.report.{EXT[f]}"
                 path.write_text(RENDERERS[f](report))
                 print(f"wrote {path}")
-        else:
+        elif not args.dashboard:
             # stdout: emit the first requested format only
             print(RENDERERS[formats[0]](report))
+
+    # One combined multi-host HTML dashboard for every target in this run.
+    if args.dashboard and built:
+        Path(args.dashboard).write_text(render_dashboard(built))
+        print(f"wrote {args.dashboard}")
     return 0
 
 
@@ -129,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--format", default="md",
                    help="comma list of md,json,html (default: md)")
     r.add_argument("--out", help="output directory (default: print to stdout)")
+    r.add_argument("--dashboard", metavar="FILE.html",
+                   help="write ONE combined multi-host HTML dashboard for all targets")
     r.set_defaults(func=cmd_report)
 
     w = sub.add_parser("whoami", help="identity view of your own (or a given) IP")
