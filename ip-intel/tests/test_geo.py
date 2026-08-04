@@ -1,0 +1,92 @@
+from ip_intel import geo
+from ip_intel.geo import parse_ipapi
+
+
+def test_parses_ipapi(fake_fetch_json):
+    g = geo.lookup("8.8.8.8", fake_fetch_json)
+    assert g.country == "United States"
+    assert g.city == "Ashburn"
+    assert g.latitude == 39.03
+    assert g.connection_type == "hosting"
+    assert "ip-api" in g.sources
+    assert "ipwho.is" in g.sources
+    assert g.disagreements == []
+
+
+def test_flags_country_disagreement():
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United States"}
+        return {"success": True, "country": "Canada"}
+    g = geo.lookup("8.8.8.8", fetch)
+    assert g.disagreements
+    assert "ip-api=United States" in g.disagreements[0]
+
+
+def test_failed_status_records_error():
+    g = parse_ipapi({"status": "fail", "message": "reserved range"})
+    assert g.country is None
+    assert g.errors and "reserved range" in g.errors[0]
+
+
+def test_parses_asn_and_proxy(fake_fetch_json):
+    g = geo.lookup("8.8.8.8", fake_fetch_json)
+    assert g.asn == 15169          # from ip-api "as": "AS15169 Google LLC"
+    assert g.postal is None or isinstance(g.postal, str)
+    assert g.proxy_vpn is False
+
+
+def test_maxmind_and_ip2location_merge_and_disagree():
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United States"}
+        return {"success": True, "country": "United States"}
+    mm = lambda ip: {"country": "United States", "city": "Mountain View",
+                     "postal": "94043"}
+    i2l = lambda ip: {"country": "Canada"}   # deliberately conflicting
+    g = geo.lookup("8.8.8.8", fetch, maxmind=mm, ip2location=i2l)
+    assert g.city == "Mountain View"         # filled from maxmind
+    assert set(g.by_source) == {"ip-api", "ipwho.is", "maxmind", "ip2location"}
+    assert any("ip2location=Canada" in d for d in g.disagreements)
+
+
+def test_registrant_country_crosscheck():
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United States"}
+        return {"success": True, "country": "United States"}
+    g = geo.lookup("8.8.8.8", fetch, registrant_country="Germany")
+    assert any("registrant=Germany" in d for d in g.disagreements)
+
+
+def test_name_vs_code_is_not_a_disagreement():
+    # ip-api returns a full name, ipwho.is + RDAP return the ISO code — same
+    # country. This must NOT be flagged (the 194.110.242 / AE false-positive).
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United Arab Emirates",
+                    "countryCode": "AE"}
+        return {"success": True, "country": "United Arab Emirates",
+                "country_code": "AE"}
+    g = geo.lookup("1.2.3.4", fetch, registrant_country="AE")
+    assert g.disagreements == []
+
+
+def test_real_disagreement_still_flagged():
+    def fetch(url, params=None, headers=None):
+        if "ip-api" in url:
+            return {"status": "success", "country": "United States",
+                    "countryCode": "US"}
+        return {"success": True, "country": "Canada", "country_code": "CA"}
+    g = geo.lookup("1.2.3.4", fetch)
+    assert any("US" in d and "CA" in d for d in g.disagreements)
+
+
+def test_ipinfo_privacy_flags(fake_fetch_json):
+    def ipinfo(ip):
+        return {"country": "United States", "asn": 15169,
+                "privacy_flags": ["vpn", "hosting"], "proxy_vpn": True}
+    g = geo.lookup("8.8.8.8", fake_fetch_json, ipinfo=ipinfo)
+    assert g.privacy_flags == ["vpn", "hosting"]
+    assert g.proxy_vpn is True
+    assert "ipinfo" in g.sources

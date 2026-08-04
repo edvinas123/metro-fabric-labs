@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+reports/
+*.report.md
+*.report.json
+*.report.html
+.env
+
+# local geo DB downloads
+data/

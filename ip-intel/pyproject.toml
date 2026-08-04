@@ -1,0 +1,29 @@
+[project]
+name = "ip-intel"
+version = "0.1.0"
+description = "ip-intel — IP information report (ownership / abuse / geo / announcement) from free public sources"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "dnspython>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+maxmind = ["geoip2>=4.8"]
+ip2location = ["IP2Location>=8.10"]
+
+[project.scripts]
+ipintel = "ip_intel.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
